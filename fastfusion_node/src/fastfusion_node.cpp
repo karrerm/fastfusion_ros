@@ -45,9 +45,9 @@ void FastFusionWrapper::run() {
 	ROS_INFO("\nRun Fastfusion .....");
 	// Synchronize the image messages received from Realsense Sensor
 	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberRGB(node_, node_.resolveName("/image/rgb_raw"), 5);
+	subscriberRGB(node_, node_.resolveName("/image_rgb"), 5);
 	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberDepth(node_, node_.resolveName("/image/depth_raw"), 5);
+	subscriberDepth(node_, node_.resolveName("/image_depth"), 5);
 	message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image>
 	sync(subscriberRGB, subscriberDepth, 10);
 	sync.registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));

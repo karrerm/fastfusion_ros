@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="ISO-8859-15"?>
 <launch>
-
-   <!-- Run fastfusion_node-->
-   <node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
-         <!-- <remap from="image_cam0"          to="cam0/image_raw" />
-          <remap from="image_cam1"          to="cam1/image_raw" />
-          <remap from="calib_cam0"          to="cam0/calibration" />
-          <remap from="calib_cam1"          to="cam1/calibration" />  -->
+	<arg name="slam_name" value="blabla"/> />
+	
+	<!-- Run fastfusion_node-->
+	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
+		<remap from="image_rgb"			to="$(arg slam_name)/camera/image/rgb_raw"	/>
+		<remap from="image_depth"		to="$(arg slam_name)/camera/image/depth_raw" />
+    
           
-          <!-- Load parameters -->
-          <rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
-   </node>
+	<!-- Load parameters -->
+ 	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
+	</node>
+	<!-- Run slam_simulation_node -->
+	<node  name="$(arg slam_name)" pkg="slam_simulation_node" type="slam_simulation_node" clear_params="true" output="screen">
+		<!-- Specify if images need to be undistorted -->
+		<param name="undistort_images" value="true"/>
+		<!-- Load parameters -->
+		<rosparam file="$(find slam_simulation_node)/cfg/params.yaml"/>
+	</node>
 </launch>
