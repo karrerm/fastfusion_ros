@@ -104,7 +104,8 @@ protected :
 	//-- Visualization Members
 	void visualize();
 	boost::thread * _visualizationThread;
-	bool _update = false;
+	bool _update;
+	bool _runVisualization;
 	boost::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);

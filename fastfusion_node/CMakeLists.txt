@@ -3,7 +3,6 @@ project(fastfusion_node)
 #set(CMAKE_BUILD_TYPE Release)
 find_package(catkin REQUIRED)
 
-
 #find_package(PCL 1.7 REQUIRED COMPONENTS common io visualization)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
@@ -28,11 +27,11 @@ set(CMAKE_AUTOMOC ON)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories("/usr/include/eigen3")
 include_directories("/usr/include/")
-include_directories("/home/karrer/catkin_ws/src/fastfusion/auxiliary/inlcude/")
-include_directories("/home/karrer/catkin_ws/src/fastfusion/camerautils/inlcude/")
-include_directories("/home/karrer/catkin_ws/src/fastfusion/tclap/inlcude/")
-include_directories("/home/karrer/catkin_ws/src/fastfusion/fusion/inlcude/")
-include_directories("/home/karrer/catkin_ws/src/fastfusion/fastfusion_node/inlcude/")
+include_directories("/home/karrer/catkin_ws/src/fastfusion_ros/auxiliary/inlcude/")
+include_directories("/home/karrer/catkin_ws/src/fastfusion_ros/camerautils/inlcude/")
+include_directories("/home/karrer/catkin_ws/src/fastfusion_ros/tclap/inlcude/")
+include_directories("/home/karrer/catkin_ws/src/fastfusion_ros/fusion/inlcude/")
+include_directories("/home/karrer/catkin_ws/src/fastfusion_ros/fastfusion_node/inlcude/")
 include_directories("/home/karrer/catkin_ws/build/fastfusion_node/include/")
 #ADD_DEFINITIONS(${QT_DEFINITIONS})
 
@@ -53,7 +52,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -msse4.2 -funroll-loops")
 
 #FIND_PACKAGE(Qt4 REQUIRED QtCore)
-#qt4_wrap_cpp(onlinefusion_node_HEADERS_MOC /home/karrer/catkin_ws/src/fastfusion/fastfusion_node/include/fastfusion_node/online_fusion_ros.hpp)
+#qt4_wrap_cpp(onlinefusion_node_HEADERS_MOC /home/karrer/catkin_ws/src/fastfusion_ros/fastfusion_node/include/fastfusion_node/online_fusion_ros.hpp)
 
 
 

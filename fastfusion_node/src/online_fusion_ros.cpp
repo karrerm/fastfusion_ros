@@ -49,6 +49,8 @@ _currentMeshInterleaved(NULL),
 	_frameCounter = 0;
 	_fusionActive = true;
 	_fusionAlive = true;
+	_update = false;
+	_runVisualization = true;
 
 	//-- Create Visualization Thread
 	_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
@@ -57,21 +59,6 @@ _currentMeshInterleaved(NULL),
 OnlineFusionROS::~OnlineFusionROS()
 {
 	std::cout << "in OnlineFusionROS destructor " << std::endl;
-	_fusionAlive = false;
-	//-- Save the current mesh to (hardcoded-location)
-		_currentMeshInterleaved->writePLY("/home/karrer/meshSave",false);
-	//-- End fusion Thread
-	if(_fusionThread){
-		_fusionThread->join();
-		delete _fusionThread;
-	}
-	//-- End visualization Thread
-	if (_visualizationThread) {
-		_visualizationThread->join();
-		delete _visualizationThread;
-	}
-
-
 	//-- Delete Data
 	if(_fusion) delete _fusion;
 	if(_currentMeshForSave) delete _currentMeshForSave;
@@ -90,6 +77,7 @@ OnlineFusionROS::~OnlineFusionROS()
 void OnlineFusionROS::stop() {
 //-- Stop the fusion process and save the current mesh if required
 	_runFusion = false;
+	_runVisualization = false;
 	if (_threadFusion) {
 		_fusionThread->join();
 	}
@@ -103,8 +91,9 @@ void OnlineFusionROS::stop() {
 	_currentMeshInterleaved->writePLY("/home/karrer/meshSave",false);
 
 	//-- End Visualization Thread
-	viewer->close();
+	//viewer->close();
 	_visualizationThread->join();
+	while (_update);
 	delete _visualizationThread;
 }
 
@@ -176,7 +165,7 @@ void OnlineFusionROS::visualize() {
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15);
 	viewer->addCoordinateSystem (1.0);
 	viewer->initCameraParameters ();
-    while (!viewer->wasStopped ()) {
+    while ((!viewer->wasStopped ()) && _runVisualization) {
     	viewer->spinOnce (100);
     	//-- Check whether the point cloud should be updated (only every 20 Frames!)
     	if(_update) {
@@ -207,9 +196,9 @@ void OnlineFusionROS::visualize() {
             point_cloud_ptr->clear();
             updateLock.unlock();
         }
-
-
     }
+    viewer->removePointCloud("visualization pc",0);
+    viewer->close();
 }
 
 
@@ -251,7 +240,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		if(!_fusionThread){
 			//-- If not yet initialize --> initialize fusion thread
 			_fusionThread = new boost::thread(&OnlineFusionROS::fusionWrapperROS, this);
-			_runFusion;
+			_runFusion = true;
 		}
 		//-- Lock and update data-queue
 		boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);

@@ -11,7 +11,6 @@
 FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //Constructor FastFusionWrapper
 //-- Load Parameters
-	// dummy: so far no parameter
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
 	bool loadSuccess = true;
 	bool threadFusion, threadMeshing;
