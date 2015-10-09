@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ISO-8859-15"?>
+<launch>
+
+   <!-- Run fastfusion_node-->
+   <node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
+         <!-- <remap from="image_cam0"          to="cam0/image_raw" />
+          <remap from="image_cam1"          to="cam1/image_raw" />
+          <remap from="calib_cam0"          to="cam0/calibration" />
+          <remap from="calib_cam1"          to="cam1/calibration" />  -->
+          
+          <!-- Load parameters -->
+          <rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
+   </node>
+</launch>

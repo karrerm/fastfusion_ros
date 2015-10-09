@@ -1,0 +1,25 @@
+/*
+ * main_fastfusion_node.cpp
+ *
+ *  Created on: Sep 27, 2015
+ *      Author: karrerm
+ */
+
+#include "fastfusion_node/?????.hpp"
+
+/**
+ * ROS-Node including the fastfusion mapping algorithm presented in
+ * ??????. The node assumes a SLAM node is active publishing image,
+ * and pose messages (e.g. slam_simulation_node for benchmark datasets).
+ */
+int main(int argc, char **argv)
+{
+  ros::init(argc, argv, "fastfusion_node");
+
+  ROS_INFO("\nStarting fastfusion node with name %s\n", ros::this_node::getName().c_str());
+
+  FastFusionWrapper fastfusion;
+  fastfusion.run();
+  return 0;
+}
+

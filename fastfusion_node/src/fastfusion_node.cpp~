@@ -1,0 +1,85 @@
+/*
+ * fastfusion_node.cpp
+ *
+ *  Created on: Sep 28, 2015
+ *      Author: karrer
+ */
+
+#include "onlinefusion/fastfusion_node.hpp"
+
+
+FastFusionWrapper::FastFusionWrapper() {
+
+}
+
+
+void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
+										const sensor_msgs::ImageConstPtr& msgDepth) {
+//-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
+//-- Convert the messages to cv::Mat and wait for tf-transform corresponding to the frames
+//-- Push the data into the fastfusion pipeline for processing.
+
+	cv::Mat imgRGB, imgDepth;
+
+	//-- Convert the incomming messages
+	getRGBImageFromRosMsg(*msgRGB, &rgbImg);
+	getDepthImageFromRosMsg(*msgDepth, &depthImg);
+	
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+    try{
+      tfListener.lookupTransform("/turtle2", "/turtle1",  
+                               ros::Time(0), transform);
+    }
+    catch (tf::TransformException ex){
+      ROS_ERROR("%s",ex.what());
+      ros::Duration(1.0).sleep();
+    }
+
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFrame;
+	CameraInfo = convertTFtoCameraInfo(transform);
+	
+}
+
+
+void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg) {
+//-- Function to convert ROS-image (RGB) message to OpenCV-Mat.
+	*rgbImg = cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
+}
+
+void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *depthImg) {
+//-- Function to convert ROS-image(depth) message to OpenCV-Mat.
+	*depthImg = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::MONO8)->image;
+}
+
+CameraInfo convertTFtoCameraInfo(const tf::Transform& transform,float fx, float fy, float px, float py) {
+//-- Function to convert a tf-transformation to the data type CameraInfo (defined in camerautils.hpp in fastfusion)
+
+	CameraInfo result;
+
+	result.setIntrinsic(intrinsic_);
+	//-- Convert Message (first convert to eigen)
+	Eigen::Quaterniond q;
+	Eigen::Matrix3d R;
+	Eigen::Vector3d c;
+ 	tf::vectorTFToEigen(transform.getOrigin(), c);
+ 	tf::quaternionTFToEigen(transform.getRotation(), q);
+ 	R = q.toRotationMatrix();
+
+	//-- Convert Eigen Matrices to member type of CameraInfo
+	cv::Mat rotation = cv::Mat::eye(3,3,cv::DataType<double>::type);
+	for(int i=0;i<3;i++) {
+		for(int j=0;j<3;j++) { 
+			rotation.at<double>(i,j) = R(i,j);
+		}
+	}
+	result.setRotation(rotation);
+	cv::Mat translation = cv::Mat::zeros(3,1,cv::DataType<double>::type);
+	for(int i=0;i<3;i++) {
+		translation.at<double>(i,0) = c(i);
+	}
+	result.setTranslation(translation);
+
+	return result;
+}

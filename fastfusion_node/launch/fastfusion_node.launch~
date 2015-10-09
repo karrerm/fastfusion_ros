@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="ISO-8859-15"?>
+<launch>
+
+   <!-- Run stereo_dense_reconstruction_node-->
+   <node  name="slam_simulation_node" pkg="slam_simulation_node" type="slam_simulation_node" clear_params="true" output="screen">
+
+
+          <!-- Specify if images need to be undistorted -->
+          <param name="undistort_images" value="true"/>
+
+          <!-- Load parameters -->
+          <rosparam file="$(find slam_simulation_node)/cfg/params.yaml"/>
+
+   </node>
+</launch>

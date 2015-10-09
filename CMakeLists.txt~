@@ -1,0 +1,96 @@
+cmake_minimum_required(VERSION 2.8)
+project(fastfusion)
+
+find_package(catkin REQUIRED)
+
+
+#set(CMAKE_BUILD_TYPE Release)
+#set(CMAKE_BUILD_TYPE RelWithDebInfo)
+#set(ROS_BUILD_TYPE RelWithDebInfo)
+#set(CMAKE_BUILD_TYPE Debug)
+#set(ROS_BUILD_TYPE Debug)
+
+#FIND_PACKAGE(Qt4 REQUIRED)
+find_package(OpenCV REQUIRED)
+
+if (CMAKE_COMPILER_IS_GNUCC)
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
+                    OUTPUT_VARIABLE GCC_VERSION)
+    string(REGEX MATCHALL "[0-9]+" GCC_VERSION_COMPONENTS ${GCC_VERSION})
+    list(GET GCC_VERSION_COMPONENTS 0 GCC_MAJOR)
+    list(GET GCC_VERSION_COMPONENTS 1 GCC_MINOR)
+
+    message(STATUS "GCC Major Version is " ${GCC_MAJOR})
+    message(STATUS "GCC Major Version is " ${GCC_MINOR})
+endif()
+
+set(CMAKE_C_FLAGS
+-frounding-math 
+#-Wall
+)
+
+
+# I think not necessary ??
+execute_process(COMMAND cat /proc/cpuinfo OUTPUT_VARIABLE CPU_INFO)
+string(REGEX MATCHALL "avx2" AVX_STRING ${CPU_INFO})
+list(LENGTH AVX_STRING AVX_STRING_LENGTH)
+# message(STATUS "AVX_STRING: " ${AVX_STRING})
+message(STATUS "Number of avx2 occurrences in /proc/cpuinfo: " ${AVX_STRING_LENGTH})
+
+
+if(${AVX_STRING_LENGTH} GREATER 0)
+message(STATUS "Compiling with AVX2 support")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -mavx2 -funroll-loops -DOWNAVX")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -mavx2 -funroll-loops -DOWNAVX")
+else()
+message(STATUS "Compiling without AVX2 support")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -msse4.2 -funroll-loops")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -msse4.2 -funroll-loops")
+endif()
+
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+
+
+
+include_directories(${PROJECT_SOURCE_DIR}/src)
+include_directories(${PROJECT_SOURCE_DIR}/src/auxiliary)
+include_directories(${PROJECT_SOURCE_DIR}/src/camerautils)
+include_directories(${PROJECT_SOURCE_DIR}/src/fusion)
+include_directories(${PROJECT_SOURCE_DIR}/src/tclap)
+message(STATUS "PROJECT_SOURCE_DIR is " ${PROJECT_SOURCE_DIR})
+
+#set(Boost_DEBUG 0)
+#set(BOOST_USE_STATIC_LIBS OFF)
+#set(BOOST_USE_MULTITHREADED ON)
+#set(BOOST_USE_STATIC_RUNTIME OFF)
+#find_package(Boost COMPONENTS thread system tr1)
+#include_directories(${Boost_INCLUDE_DIRS})
+
+#find_package(Eigen3 REQUIRED)
+#include_directories(EIGEN3_INCLUDE_DIR)
+include_directories("/usr/include/eigen3")
+
+
+# Doxygen integration
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+#this adds the correct folder to INPUT= :
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
+
+#add doc target
+add_custom_target(doc
+${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+COMMENT "generating docs with Doxygen" VERBATIM
+)
+endif(DOXYGEN_FOUND)
+
+add_subdirectory(src)
+# Need to include stuff from the cmake files from subdirectories ???
+
+

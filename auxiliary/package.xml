@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package>
+  <name>auxiliary</name>
+  <version>0.0.0</version>
+  <description>Sub-Package containing fastfustion from TUM</description>
+  <maintainer email="karrerm@student.ethz.ch">Marco Karrer</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+</package>

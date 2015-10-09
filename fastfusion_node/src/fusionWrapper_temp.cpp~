@@ -1,0 +1,241 @@
+void fusionWrapper
+(
+	  std::vector<std::vector<cv::Mat> > depthImgs,
+	  std::vector<std::vector<cv::Mat> > rgbImgs,
+	  std::vector<std::vector<CameraInfo> > poses,
+	  FusionParameter par,
+	  volatile long int *_currentFrame,
+	  volatile long int *_currentTrajectory,
+	  volatile bool *newMesh,
+	  volatile bool *fusionActive,
+		volatile bool *fusionAlive
+)
+{
+	fprintf(stderr,"\nStarting separate Fusion Thread on Frame %li",*_currentFrame+1);
+	FusionMipMapCPU *fusion = par.fusion;
+	float imageDepthScale = par.imageDepthScale;
+	float maxCamDistance = par.maxCamDistance;
+	bool threadImageReading = par.threadImageReading;
+ 	size_t stopFrame = par.stopFrame;
+
+	unsigned int startFrame = *_currentFrame+1;
+	unsigned int fusedFrames = startFrame;
+
+	std::vector<CameraInfo> &pLast = poses.back();
+	size_t lastFrame = std::min(stopFrame,pLast.size());
+
+	std::vector<std::string> &depthLast = depthNames.back();
+	std::vector<std::string> &rgbLast = rgbNames.back();
+
+	if(depthLast.size() != rgbLast.size()){
+		fprintf(stderr,"\nERROR: The last Depth and RGB Name Vectors have different Size!");
+		return;
+	}
+
+	volatile cv::Mat **depthImageBuffer = new volatile cv::Mat*[depthLast.size()];
+#ifdef PREPROCESS_IMAGES
+	volatile std::vector<cv::Mat> **rgbSplitImageBuffer = new volatile std::vector<cv::Mat> *[rgbLast.size()];
+#else
+	volatile cv::Mat **rgbImageBuffer = new volatile cv::Mat *[rgbLast.size()];
+#endif
+	for(unsigned int i=0;i<depthLast.size();i++){
+		depthImageBuffer[i] = NULL;
+#ifdef PREPROCESS_IMAGES
+		rgbSplitImageBuffer[i] = NULL;
+#else
+		rgbImageBuffer[i] = NULL;
+#endif
+	}
+
+	bool readingActive = true;
+
+	boost::thread *imageThread = NULL;
+  if(threadImageReading){
+  	fprintf(stderr,"\nStarting Image Reading in decoupled Thread");
+#ifdef PREPROCESS_IMAGES
+  	imageThread = new boost::thread(imageReadingAndPreprocessingWrapper,depthLast,rgbLast,depthLast.size(),
+  			startFrame,depthLast.size(),depthImageBuffer,rgbSplitImageBuffer,&readingActive,maxCamDistance);
+#else
+  	imageThread = new boost::thread(imageReadingWrapper,depthLast,rgbLast,
+  			startFrame,lastFrame,depthImageBuffer,rgbImageBuffer,&readingActive,maxCamDistance,&fusedFrames);
+#endif
+  }
+
+	if(poses.size()<=1){
+
+		//TODO: Warum funzt das nicht auch ohne volatile size_t und nur mit volatile pointern?!
+		for(volatile size_t currentFrame=startFrame;*fusionAlive && currentFrame<lastFrame;){
+			if(*fusionActive){
+				if(threadImageReading){
+					while(!depthImageBuffer[currentFrame] ||
+#ifdef PREPROCESS_IMAGES
+							!rgbSplitImageBuffer[currentFrame]
+#else
+							!rgbImageBuffer[currentFrame]
+#endif
+							                     )
+//						fprintf(stderr," W:%li",currentFrame)
+						;
+#ifdef PREPROCESS_IMAGES
+					DEBUG(fprintf(stderr,"\nAdd Depthmap %li",currentFrame));
+					fusion->addMap(*((cv::Mat*)depthImageBuffer[currentFrame]),pLast[currentFrame],
+							*((std::vector<cv::Mat>*)rgbSplitImageBuffer[currentFrame]));
+#else
+					fusion->addMap(*((cv::Mat*)depthImageBuffer[currentFrame]),pLast[currentFrame],
+							*((cv::Mat*)rgbImageBuffer[currentFrame]),1.0f/imageDepthScale,maxCamDistance);
+#endif
+//					fprintf(stderr,"\nDeleting Depth Image %li",currentFrame);
+//					delete depthImageBuffer[currentFrame];
+#ifdef PREPROCESS_IMAGES
+					delete rgbSplitImageBuffer[currentFrame];
+#else
+//					fprintf(stderr,"\nDeleting RGB Image %li",currentFrame);
+//					delete rgbImageBuffer[currentFrame];
+#endif
+
+#ifndef DEBUG_NO_MESHES
+					*newMesh = fusion->updateMeshes();
+#endif
+
+					currentFrame++;
+					fusedFrames = currentFrame;
+				}
+				else{
+					eprintf("\nAdd Depthmap %li",currentFrame);
+					cv::Mat depthimage = cv::imread(depthLast[currentFrame],-1);
+					cv::Mat rgbimage = cv::imread(rgbLast[currentFrame]);
+#ifdef PREPROCESS_IMAGES
+					depthimage.convertTo(depthimage,CV_32FC1,1/(imageDepthScale));
+					depthimage.setTo(IMAGEINFINITE,depthimage == 0.0);
+					depthimage.setTo(IMAGEINFINITE,depthimage >= maxCamDistance);
+					std::vector<cv::Mat> split(3);
+					cv::split(rgbimage,split);
+					if(depthimage.empty()) fprintf(stderr,"\nERROR: %s is empty!",
+							depthLast[currentFrame].c_str());
+					fusion->addMap(depthimage,pLast[currentFrame],split);
+#else
+					eprintf("\nAdding Integer Depthmap");
+					fusion->addMap(depthimage,pLast[currentFrame],rgbimage,1.0f/imageDepthScale,maxCamDistance);
+					eprintf("\nInteger Depthmap added.");
+#endif
+
+#ifndef DEBUG_NO_MESHES
+					*newMesh = fusion->updateMeshes();
+#endif
+
+					currentFrame++;
+				}
+				*_currentFrame = currentFrame;
+			}
+		}
+	}
+	else{
+		if(*_currentTrajectory<0) *_currentTrajectory = 0;
+		for(volatile size_t currentTrajectory=*_currentTrajectory;*fusionAlive && currentTrajectory<poses.size();){
+			if(*fusionActive){
+
+				volatile size_t firstImage = currentTrajectory>0 ? poses[currentTrajectory-1].size() : 0;
+				volatile size_t lastImage = poses[currentTrajectory].size();
+
+				std::vector<cv::Mat> depthImages;
+#ifdef PREPROCESS_IMAGES
+				std::vector<std::vector<cv::Mat> > rgbSplitImages;
+#else
+				std::vector<cv::Mat> rgbImages;
+#endif
+				volatile size_t currentFrame = firstImage;
+
+
+				fprintf(stderr,"\nAdding Multiple Images from %li to %li at Trajectory %li",
+						firstImage,lastImage,currentTrajectory);
+
+				if(threadImageReading){
+					while(!depthImageBuffer[currentFrame] ||
+#ifdef PREPROCESS_IMAGES
+							!rgbSplitImageBuffer[currentFrame]
+#else
+							!rgbImageBuffer[currentFrame]
+#endif
+							                     )
+						;
+
+					while(currentFrame<lastImage){
+						depthImages.push_back(*((cv::Mat*)depthImageBuffer[currentFrame]));
+#ifdef PREPROCESS_IMAGES
+						rgbSplitImages.push_back(*((std::vector<cv::Mat>*)rgbSplitImageBuffer[currentFrame]));
+#else
+						rgbImages.push_back(*((cv::Mat*)rgbImageBuffer[currentFrame]));
+#endif
+						currentFrame++;
+					}
+				}
+				else{
+
+					while(currentFrame<lastImage){
+						depthImages.push_back(cv::Mat());
+						cv::Mat &depthimage = depthImages.back();
+						depthimage = cv::imread(depthNames[currentTrajectory][currentFrame],-1);
+						cv::Mat rgbimage = cv::imread(rgbNames[currentTrajectory][currentFrame]);
+#ifdef PREPROCESS_IMAGES
+						depthimage.convertTo(depthimage,CV_32FC1,1/(imageDepthScale));
+						depthimage.setTo(IMAGEINFINITE,depthimage == 0.0);
+						depthimage.setTo(IMAGEINFINITE,depthimage >= maxCamDistance);
+						rgbSplitImages.push_back(std::vector<cv::Mat>(3));
+						std::vector<cv::Mat> &split = rgbSplitImages.back();
+						cv::split(rgbimage,split);
+#else
+						rgbImages.push_back(rgbimage);
+#endif
+
+						currentFrame++;
+					}
+				}
+				currentFrame--;
+
+
+#ifdef PREPROCESS_IMAGES
+				fusion->addMap(depthImages,poses[currentTrajectory],rgbSplitImages,_currentFrame);
+#else
+//FIXME: Hier muss vektor-addMap mit Integer-Werten rein!
+#endif
+
+				depthImages.clear();
+
+#ifdef PREPROCESS_IMAGES
+				rgbSplitImages.clear();
+#else
+			rgbImages.clear();
+#endif
+
+				fprintf(stderr,"\nAdded Images up to Frame %li",currentFrame);
+
+				fprintf(stderr,"M");
+				*newMesh = fusion->updateMeshes();
+				fprintf(stderr,"!");
+
+				fprintf(stderr,"\nTrajectory %li finished",currentTrajectory);
+				currentTrajectory++;
+				*_currentTrajectory = currentTrajectory;
+
+				currentFrame++;
+//				*_currentFrame = currentFrame;
+			}
+		}
+	}
+
+	readingActive= false;
+
+  if(threadImageReading){
+  	if(imageThread){
+  		imageThread->join();
+  		delete imageThread;
+  	}
+  }
+
+	delete [] depthImageBuffer;
+#ifdef PREPROCESS_IMAGES
+	delete [] rgbSplitImageBuffer;
+#else
+	delete [] rgbImageBuffer;
+#endif
+}
