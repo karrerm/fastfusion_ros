@@ -23,3 +23,6 @@ cy : 239.5
 # Depth Consistency Checks
 depthConsistencyChecks : 0
 
+# Mesh Saving (location + desired Name without ending)
+saveMesh : true
+fileLocation : /home/karrer/meshTest

@@ -13,7 +13,8 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //-- Load Parameters
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
 	bool loadSuccess = true;
-	bool threadFusion, threadMeshing;
+	bool threadFusion, threadMeshing, saveMesh;
+	std::string fileLocation;
 	int depthChecks;
 	double imageScale,scale,threshold;
 	loadSuccess &= nodeLocal_.getParam("threadFusion", threadFusion);
@@ -26,9 +27,12 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("cx", intrinsic_.at<double>(0,2));
 	loadSuccess &= nodeLocal_.getParam("cy", intrinsic_.at<double>(1,2));
 	loadSuccess &= nodeLocal_.getParam("depthConsistencyChecks", depthChecks);
+	loadSuccess &= nodeLocal_.getParam("saveMesh",saveMesh);
+	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
-		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks);
+		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks,
+								  saveMesh, fileLocation);
 
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");

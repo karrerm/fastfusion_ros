@@ -74,7 +74,8 @@ public:
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
 	//-- Initialization of the parameters read from the ROS parameter file
-	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks);
+	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+			   bool saveMesh, std::string fileName);
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
 	MeshInterleaved *_currentMeshInterleaved;
@@ -129,6 +130,8 @@ protected :
 	unsigned int _meshNumber;
 	unsigned int _fusionNumber;
 	float _cx; float _cy; float _cz;
+	bool _saveMesh;
+	std::string _fileName;
 
 	//-- Probably unused variables (maybe can get rid of them)
 	long long _lastComputedFrame;

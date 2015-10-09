@@ -88,8 +88,9 @@ void OnlineFusionROS::stop() {
 	delete _fusionThread;
 
 	//-- Save current Mesh
-	_currentMeshInterleaved->writePLY("/home/karrer/meshSave",false);
-
+	if (_saveMesh) {
+		_currentMeshInterleaved->writePLY(_fileName,false);
+	}
 	//-- End Visualization Thread
 	//viewer->close();
 	_visualizationThread->join();
@@ -98,13 +99,16 @@ void OnlineFusionROS::stop() {
 }
 
 
-void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks){
+void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+								bool saveMesh, std::string fileName){
 //-- Initialize FusionMipMapCPU-class (_fusion)
 	_fusion = new FusionMipMapCPU(0,0,0,scale,threshold,0,true);
 	_fusion->setThreadMeshing(meshingThread);
 	_fusion->setDepthChecks(depthChecks);
 	_fusion->setIncrementalMeshing(true);
 	_threadFusion = fusionThread;
+	_saveMesh = saveMesh;
+	_fileName = fileName;
 
 }
 /*  Not needed in this implementation
