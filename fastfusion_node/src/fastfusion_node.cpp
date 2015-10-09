@@ -55,8 +55,6 @@ void FastFusionWrapper::run() {
 	//-- Stop the fusion process
 	onlinefusion_.stop();
 	ros::shutdown();
-
-
 }
 
 void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
@@ -76,7 +74,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 		//-- Get Pose (tf-listener)
 		tf::StampedTransform transform;
 		try{
-		  tfListener.lookupTransform("/world", "/cam",
+		  tfListener.lookupTransform("/ref", "/cam",
 								   ros::Time(0), transform);
 		}
 		catch (tf::TransformException ex){

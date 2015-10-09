@@ -6,7 +6,8 @@
 	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
 		<remap from="image_rgb"			to="$(arg slam_name)/camera/image/rgb_raw"	/>
 		<remap from="image_depth"		to="$(arg slam_name)/camera/image/depth_raw" />
-    
+    	<remap from="ref"				to="world"	/>
+    	<remap from="cam"				to="cam"	/>
           
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
