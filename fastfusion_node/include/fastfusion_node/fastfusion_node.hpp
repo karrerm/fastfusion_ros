@@ -44,6 +44,9 @@ protected:
 	ros::NodeHandle node_, nodeLocal_;
 	cv::Mat intrinsic_;
 	OnlineFusionROS onlinefusion_;
+
+	std::string world_id_;
+	std::string cam_id_;
 };
 
 

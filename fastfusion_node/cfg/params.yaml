@@ -26,3 +26,7 @@ depthConsistencyChecks : 0
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
 fileLocation : /home/karrer/meshTest
+
+# TF Id's
+world_id : /world
+cam_id : /cam

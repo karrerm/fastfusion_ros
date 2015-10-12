@@ -29,6 +29,8 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("depthConsistencyChecks", depthChecks);
 	loadSuccess &= nodeLocal_.getParam("saveMesh",saveMesh);
 	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);
+	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);
+	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks,
@@ -74,7 +76,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 		//-- Get Pose (tf-listener)
 		tf::StampedTransform transform;
 		try{
-		  tfListener.lookupTransform("/ref", "/cam",
+		  tfListener.lookupTransform(world_id_, cam_id_,
 								   ros::Time(0), transform);
 		}
 		catch (tf::TransformException ex){
