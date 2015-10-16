@@ -22,6 +22,7 @@
 
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 
 class FastFusionWrapper {
@@ -42,8 +43,12 @@ protected:
 	CameraInfo convertTFtoCameraInfo(const tf::Transform& transform);
 	//-- ROS node handle
 	ros::NodeHandle node_, nodeLocal_;
+	ros::Time previous_ts_;
 	cv::Mat intrinsic_;
 	OnlineFusionROS onlinefusion_;
+
+	std::string world_id_;
+	std::string cam_id_;
 };
 
 

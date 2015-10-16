@@ -13,7 +13,8 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //-- Load Parameters
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
 	bool loadSuccess = true;
-	bool threadFusion, threadMeshing;
+	bool threadFusion, threadMeshing, saveMesh;
+	std::string fileLocation;
 	int depthChecks;
 	double imageScale,scale,threshold;
 	loadSuccess &= nodeLocal_.getParam("threadFusion", threadFusion);
@@ -26,9 +27,14 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("cx", intrinsic_.at<double>(0,2));
 	loadSuccess &= nodeLocal_.getParam("cy", intrinsic_.at<double>(1,2));
 	loadSuccess &= nodeLocal_.getParam("depthConsistencyChecks", depthChecks);
+	loadSuccess &= nodeLocal_.getParam("saveMesh",saveMesh);
+	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);
+	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);
+	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
-		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks);
+		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks,
+								  saveMesh, fileLocation);
 
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
@@ -41,18 +47,19 @@ void FastFusionWrapper::run() {
 	ROS_INFO("\nRun Fastfusion .....");
 	// Synchronize the image messages received from Realsense Sensor
 	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberRGB(node_, node_.resolveName("/image/rgb_raw"), 5);
+	subscriberRGB(node_, node_.resolveName("image_rgb"), 5);
 	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberDepth(node_, node_.resolveName("/image/depth_raw"), 5);
-	message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image>
-	sync(subscriberRGB, subscriberDepth, 10);
+	subscriberDepth(node_, node_.resolveName("image_depth"), 5);
+	//message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image>
+	///sync(subscriberRGB, subscriberDepth, 10);
+	//typedef message_filters::sync_policies::ApproximateTime<Image, Image> MySyncPolicy;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
+	sync(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),subscriberRGB,subscriberDepth);
 	sync.registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
 	ros::spin();
 	//-- Stop the fusion process
 	onlinefusion_.stop();
 	ros::shutdown();
-
-
 }
 
 void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
@@ -60,48 +67,64 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 //-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
 //-- Convert the messages to cv::Mat and wait for tf-transform corresponding to the frames
 //-- Push the data into the fastfusion pipeline for processing.
-	if (onlinefusion_.isReady()){
-
-		cv::Mat imgRGB, imgDepth;
-
-		//-- Convert the incomming messages
-		getRGBImageFromRosMsg(msgRGB, &imgRGB);
-		getDepthImageFromRosMsg(msgDepth, &imgDepth);
-
-
-		//-- Get Pose (tf-listener)
-		tf::StampedTransform transform;
-		try{
-		  tfListener.lookupTransform("/world", "/cam",
-								   ros::Time(0), transform);
-		}
-		catch (tf::TransformException ex){
-		  ROS_ERROR("%s",ex.what());
-		  ros::Duration(1.0).sleep();
-		}
-		//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
-		CameraInfo incomingFramePose;
-		incomingFramePose = convertTFtoCameraInfo(transform);
-		//-- Fuse the imcoming Images into existing map
-		onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose);
-	} else {
-		std::cout << "Dropped Frame " << std::endl;
+	if ((msgRGB->header.stamp - previous_ts_).toSec() <= 0.03){
+		return;
 	}
-	
+
+	cv::Mat imgRGB, imgDepth;
+	ros::Time timeMeas;
+	//-- Convert the incomming messagesb
+	getRGBImageFromRosMsg(msgRGB, &imgRGB);
+	getDepthImageFromRosMsg(msgDepth, &imgDepth);
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgRGB->header.stamp;
+	previous_ts_ = timestamp;
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_,cam_id_,
+                    				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+									timestamp, transform);
+		/*
+		ros::Time timeNow = ros::Time::now();
+		tfListener.waitForTransform(world_id_,cam_id_,
+			                    	timeNow, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+					 	 	 	 	timeNow, transform);
+					 	 	 	 	*/
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+	}
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+	//-- Fuse the imcoming Images into existing map
+	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose);
 }
 
 
 void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg) {
 //-- Function to convert ROS-image (RGB) message to OpenCV-Mat.
-	*rgbImg = cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
+	cv::Mat rgbImg2 = cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
+	cv::resize(rgbImg2,*rgbImg,cv::Size(480,360),cv::INTER_LINEAR);
+	//*rgbImg = cv_bridge::toCvCopy(msgRGB)->image;
 }
 
 void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *depthImg) {
 //-- Function to convert ROS-image(depth) message to OpenCV-Mat.
-	cv::Mat depthImg2 = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::MONO8)->image;
+	*depthImg = cv_bridge::toCvCopy(msgDepth, sensor_msgs::image_encodings::TYPE_16UC1)->image;
+	//cv::Mat depthImg2 = cv_bridge::toCvCopy(msgDepth,sensor_msgs::image_encodings::TYPE_16UC1)->image;
+	//depthImg2 = depthImg2;
+	//depthImg2.convertTo(*depthImg,CV_16UC1);
+	//cv::imwrite("/home/karrer/depth.png",*depthImg);
 	//-- Convert the image to 16 bit (fastfusion requires 16 bit depth images)
-	depthImg2.convertTo(*depthImg,CV_16UC1);
-	*depthImg = *depthImg*255;
+	//depthImg2.convertTo(*depthImg,CV_16UC1);
+	//*depthImg = *depthImg*5000;
+
 }
 
 CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transform) {
@@ -110,6 +133,7 @@ CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transfo
 	//TODO: Why are the images never undistorted??
 	CameraInfo result;
 	result.setIntrinsic(intrinsic_);
+
 	//-- Convert Message (first convert to eigen)
 	Eigen::Quaterniond q;
 	Eigen::Matrix3d R;
@@ -131,6 +155,7 @@ CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transfo
 		translation.at<double>(i,0) = c(i);
 	}
 	result.setTranslation(translation);
+
 	//-- Return the camera intrinsics/extrinsics in the CameraInfo format
 	return result;
 }
