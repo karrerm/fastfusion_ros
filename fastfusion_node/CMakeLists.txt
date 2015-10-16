@@ -14,7 +14,7 @@ find_package(Eigen REQUIRED)
 #################################################
 # 	Perform all set commands                   	#
 #################################################
-#set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 set(OpenCV_LIBS opencv_core opencv_imgproc opencv_highgui opencv_calib3d)
 #set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -mavx2 -funroll-loops -DOWNAVX")
@@ -60,7 +60,8 @@ target_link_libraries(fastfusion_node
 										${PCL_LIBRARIES}
 										pcl_common
 										pcl_io
-										pcl_visualization)
+										pcl_visualization
+										pcl_surface)
 
 cs_install()
 cs_export()
