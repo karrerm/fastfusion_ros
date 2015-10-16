@@ -93,9 +93,9 @@ void OnlineFusionROS::stop() {
 	}
 	//-- End Visualization Thread
 	//viewer->close();
-	_visualizationThread->join();
-	while (_update);
-	delete _visualizationThread;
+	//_visualizationThread->join();
+	//while (_update);
+	//delete _visualizationThread;
 }
 
 
@@ -105,6 +105,7 @@ void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float im
 	_fusion = new FusionMipMapCPU(0,0,0,scale,threshold,0,true);
 	_fusion->setThreadMeshing(meshingThread);
 	_fusion->setDepthChecks(depthChecks);
+	_imageDepthScale = imageScale;
 	_fusion->setIncrementalMeshing(true);
 	_threadFusion = fusionThread;
 	_saveMesh = saveMesh;
@@ -167,7 +168,7 @@ void OnlineFusionROS::visualize() {
 	bool pointcloudInit = false;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15);
-	viewer->addCoordinateSystem (1.0);
+	viewer->addCoordinateSystem (0.1);
 	viewer->initCameraParameters ();
     while ((!viewer->wasStopped ()) && _runVisualization) {
     	viewer->spinOnce (100);
@@ -177,9 +178,11 @@ void OnlineFusionROS::visualize() {
     		boost::mutex::scoped_lock updateLock(_visualizationUpdateMutex);
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
     		pcl::PointXYZRGB pointTemp;
-    		pcl::Vertices vertTemp;
+    		std::vector<pcl::Vertices>  polygons;
+    		pcl::Vertices tempFace;
+
     		//-- Generate Point cloud from vertexes (!!! O(n)-operation !!!)
-    		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
+     		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
     			pointTemp.x = _currentMeshInterleaved->vertices[i].x;
     			pointTemp.y = _currentMeshInterleaved->vertices[i].y;
     			pointTemp.z = _currentMeshInterleaved->vertices[i].z;
@@ -188,17 +191,37 @@ void OnlineFusionROS::visualize() {
     			pointTemp.b = _currentMeshInterleaved->colors[i].b;
     			point_cloud_ptr->points.push_back (pointTemp);
     		}
-    		//-- Update Viewer (delete old cloud and replace with new)
-    		//viewer->removePointCloud ("sample cloud", 0);
+    		for (unsigned int i = 0; i < _currentMeshInterleaved->faces.size();i+= _currentMeshInterleaved->_verticesPerFace){
+    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+0]);
+    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+1]);
+    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+2]);
+    			polygons.push_back(tempFace);
+    			tempFace.vertices.clear();
+    		}
+    		updateLock.unlock();
+    		pcl::PolygonMesh triangles;
+    		pcl::PCLPointCloud2 msg;
+    		//sensor_msgs::PointCloud2 msg;
+    		pcl::toPCLPointCloud2 (*point_cloud_ptr, msg);
+    		//pcl::toROSMsg(*point_cloud_ptr, msg);
+    		triangles.cloud = msg;
+    		triangles.polygons = polygons;
+    		//-- Update Viewer
     		if (pointcloudInit) {
     			viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
+    			/* Mesh visualization --> slow
+    			viewer->removePolygonMesh("visualization pc");
+    			viewer->addPolygonMesh(triangles,"visualization pc"); */
     		} else {
     			viewer->addPointCloud(point_cloud_ptr, "visualization pc");
+    			/* Mesh visualization --> slow
+    			viewer->addPolygonMesh(triangles,"visualization pc"); */
     			pointcloudInit = true;
     		}
             _update = false;
             point_cloud_ptr->clear();
-            updateLock.unlock();
+            polygons.clear();
+
         }
     }
     viewer->removePointCloud("visualization pc",0);
@@ -216,7 +239,6 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		_isReady = false;
 		_currentPose = pose;
 		depthImg.copyTo(_currentDepthImg);
-
 		//-- Lock visualization Mutex
 		boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
@@ -246,11 +268,13 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			_fusionThread = new boost::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
 		}
+		std::cout << "Scale = " << _imageDepthScale << std::endl;
 		//-- Lock and update data-queue
 		boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
 		_queueRGB.push(rgbImg);
 		_queueDepth.push(depthImg);
 		_queuePose.push(pose);
+		std::cout << "There are " << _queuePose.size() << " Frames in the queue" << std::endl;
 		updateLock.unlock();
 		_frameCounter++;
 		//--Update Mesh
