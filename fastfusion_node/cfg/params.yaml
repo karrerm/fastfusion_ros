@@ -21,11 +21,11 @@ cx : 241.26553344726562 #319.183641033155
 cy : 178.0287322998047 #247.053820358135535.4
 
 # Depth Consistency Checks
-depthConsistencyChecks : 100
+depthConsistencyChecks : 10
 
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
-fileLocation : /home/karrer/meshSteady
+fileLocation : /home/karrer/meshDesk1
 
 # TF Id's
 world_id : /world
