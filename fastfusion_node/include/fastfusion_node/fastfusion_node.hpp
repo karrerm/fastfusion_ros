@@ -23,6 +23,7 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <pcl/io/ply_io.h>
 
 
 class FastFusionWrapper {
@@ -34,6 +35,8 @@ public:
 protected:
 	//-- Image Message Callback
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
+	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msg_depth);
+	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *dephtImg);
 
@@ -46,9 +49,16 @@ protected:
 	ros::Time previous_ts_;
 	cv::Mat intrinsic_;
 	OnlineFusionROS onlinefusion_;
+	image_transport::Subscriber *subscriberOnlyDepth_;
+	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
+	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> > *sync_;
+
 
 	std::string world_id_;
 	std::string cam_id_;
+
+	bool use_pmd_;
 };
 
 
