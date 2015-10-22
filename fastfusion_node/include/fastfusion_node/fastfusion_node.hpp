@@ -59,6 +59,7 @@ protected:
 	std::string cam_id_;
 
 	bool use_pmd_;
+	bool testing_point_cloud_;
 };
 
 

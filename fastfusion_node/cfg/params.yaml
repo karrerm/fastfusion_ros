@@ -32,4 +32,4 @@ world_id : /world
 cam_id : /camera
 
 # Define if using Time of flight sensor or not
-use_pmd : true
+use_pmd : false

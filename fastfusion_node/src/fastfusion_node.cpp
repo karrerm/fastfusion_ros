@@ -40,6 +40,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
+	testing_point_cloud_ = false;
 }
 
 void FastFusionWrapper::run() {
@@ -120,25 +121,27 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	//-- Convert the incomming messagesb
 	getRGBImageFromRosMsg(msgRGB, &imgRGB);
 	getDepthImageFromRosMsg(msgDepth, &imgDepth);
-	cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
 	//-- Compute Point Cloud for testing
-	float fx = intrinsic_.at<float>(0,0);
-	float fy = intrinsic_.at<float>(1,1);
-	float cx = intrinsic_.at<float>(0,2);
-	float cy = intrinsic_.at<float>(1,2);
-	pcl::PointXYZ tempPoint;
-	pcl::PointCloud<pcl::PointXYZ> pointCloud;
-	for (int i = 0; i < imgDepth.rows; i++) {
-		for (int j = 0; j < imgDepth.cols; j++) {
-			tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/5000.0f;
-			tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
-			tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
-			pointCloud.push_back(tempPoint);
+	if (testing_point_cloud_) {
+		cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
+		float fx = intrinsic_.at<float>(0,0);
+		float fy = intrinsic_.at<float>(1,1);
+		float cx = intrinsic_.at<float>(0,2);
+		float cy = intrinsic_.at<float>(1,2);
+		pcl::PointXYZ tempPoint;
+		pcl::PointCloud<pcl::PointXYZ> pointCloud;
+		for (int i = 0; i < imgDepth.rows; i++) {
+			for (int j = 0; j < imgDepth.cols; j++) {
+				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/5000.0f;
+				tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
+				tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
+				pointCloud.push_back(tempPoint);
+			}
 		}
+		pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
+		pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
+		pointCloud.clear();
 	}
-	pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
-	pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
-	pointCloud.clear();
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgRGB->header.stamp;
 	previous_ts_ = timestamp;
@@ -166,7 +169,9 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
 	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
-	pcl::io::savePLYFile ("/home/karrer/PointCloud.ply", pcl_cloud, false);
+	if (testing_point_cloud_) {
+		pcl::io::savePLYFile ("/home/karrer/PointCloud.ply", pcl_cloud, false);
+	}
 }
 
 void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg) {
