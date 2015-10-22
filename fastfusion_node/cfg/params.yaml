@@ -30,3 +30,6 @@ fileLocation : /home/karrer/meshSteady
 # TF Id's
 world_id : /world
 cam_id : /camera
+
+# Define if using Time of flight sensor or not
+use_pmd : true
