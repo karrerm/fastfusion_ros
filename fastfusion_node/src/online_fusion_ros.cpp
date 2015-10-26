@@ -166,10 +166,24 @@ void OnlineFusionROS::visualize() {
 //-- Careful!: No check whether the mesh changes during the point cloud generation is performed--> may cause Problems!!
 	//-- Initialize PCL-Viewer
 	bool pointcloudInit = false;
+	//-- Set Camera Viewing Parameters
+	pcl::visualization::Camera camera;
+	camera.focal[0] = -0.365056; camera.focal[1] = -0.026536; camera.focal[2] = -0.0145319;
+	camera.pos[0] = -0.160066; camera.pos[1] = -0.540765; camera.pos[2] = 0.599112;
+	camera.view[0] = -0.336011; camera.view[1] = 0.663623; camera.view[2] = 0.668357;
+	camera.clip[0] = 0.00431195; camera.clip[1] = 4.31195;
+	camera.fovy = 0.8575;
+	camera.window_size[0] = 960; camera.window_size[1] = 540;
+	camera.window_pos[0] = 0; camera.window_pos[1] = 0;
+
+	std::vector<pcl::visualization::Camera> cameras;
+
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
+	viewer->setCameraParameters(camera,0);
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15);
-	viewer->addCoordinateSystem (0.1);
-	viewer->initCameraParameters ();
+	//viewer->addCoordinateSystem (0.1);
+	//viewer->initCameraParameters ();
+
 	cv::Mat K_cv,Ext_cv, R_cv,t_cv;
 	Eigen::Matrix4f Ext;
 	Eigen::Matrix3f K,R;
@@ -185,7 +199,8 @@ void OnlineFusionROS::visualize() {
 
     while ((!viewer->wasStopped ()) && _runVisualization) {
     	viewer->spinOnce (10);
-    	viewer->setCameraPosition(0.0268573,26.8573,0,1/0.686973,-1.44275,2.42881/-0.078733,0.682304,0.726817/0.8575/960,540/65,52);
+    	//viewer->setCameraParameters(camera,0);
+    	//viewer->setCameraParameters(camera,0);
     	//-- Get Extrinsics
     	R_cv = _currentPose.getRotation();
     	t_cv = _currentPose.getTranslation();
@@ -196,7 +211,7 @@ void OnlineFusionROS::visualize() {
     	}
     	t(0) = (float)t_cv.at<double>(0,0); t(1) = (float)t_cv.at<double>(1,0); t(2) = (float)t_cv.at<double>(2,0);
     	//-- Compute Camera Frustum
-    	tl1 = (R*tl0 + t)*0.7; tr1 = (R*tr0 + t)*0.7; br1 = (R*br0 + t)*0.7; bl1 = (R*bl0 + t)*0.7; c1 = (R*c0 + t)*0.7;
+    	tl1 = (R*tl0 + t)*0.5; tr1 = (R*tr0 + t)*0.5; br1 = (R*br0 + t)*0.5; bl1 = (R*bl0 + t)*0.5; c1 = (R*c0 + t)*0.5;
     	//-- Draw Camera Frustum
     	viewer->removeShape("t",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
@@ -222,13 +237,15 @@ void OnlineFusionROS::visualize() {
     	viewer->removeShape("br_c",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
     			pcl::PointXYZ(c1(0),c1(1),c1(2)),1.0, 0.0, 0.0, "br_c", 0);
-    	/*
+
     	//-- Set Camera viewpoint
+    	/*
     	viewer->setCameraPosition(t_cv.at<double>(0,0)-R_cv.at<double>(0,2)*2.5,t_cv.at<double>(1,0)-R_cv.at<double>(1,2)*2.5,
     			t_cv.at<double>(2,0)-R_cv.at<double>(2,2)*2.5,t_cv.at<double>(0,0)+R_cv.at<double>(0,3),t_cv.at<double>(1,0)+R_cv.at<double>(1,2),
 				t_cv.at<double>(2,0)+R_cv.at<double>(2,2),0,0,1,0);
 		*/
     	//-- Check whether the point cloud should be updated (only every 20 Frames!)
+
     	if(_update) {
     		//-- Lock Data queue
     		boost::mutex::scoped_lock updateLock(_visualizationUpdateMutex);
@@ -254,7 +271,7 @@ void OnlineFusionROS::visualize() {
     			polygons.push_back(tempFace);
     			tempFace.vertices.clear();
     		}
-    		*/
+			*/
     		updateLock.unlock();
     		//pcl::PolygonMesh triangles;
     		//pcl::PCLPointCloud2 msg;
@@ -266,22 +283,34 @@ void OnlineFusionROS::visualize() {
     		//-- Update Viewer
     		if (pointcloudInit) {
     			viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
-    			/* Mesh visualization --> slow
-    			viewer->removePolygonMesh("visualization pc");
-    			viewer->addPolygonMesh(triangles,"visualization pc"); */
+    			// Mesh visualization --> slow
+    			//viewer->removePolygonMesh("visualization pc");
+    			//viewer->addPolygonMesh(triangles,"visualization pc");
     		} else {
     			viewer->addPointCloud(point_cloud_ptr, "visualization pc");
-    			/* Mesh visualization --> slow
-    			viewer->addPolygonMesh(triangles,"visualization pc"); */
+    			// Mesh visualization --> slow
+    			//viewer->addPolygonMesh(triangles,"visualization pc");
     			pointcloudInit = true;
     		}
             _update = false;
             point_cloud_ptr->clear();
             //polygons.clear();
         }
+    	viewer->getCameras(cameras);
     }
     viewer->removePointCloud("visualization pc",0);
     viewer->close();
+    //-- Output the last camera parameters
+    std::cout << " \n \n \n";
+    std::cout << "----- All Camera View Parameters --------" << std::endl;
+    std::cout << "camera.focal[0] = " << cameras[0].focal[0] << "; camera.focal[1] = " << cameras[0].focal[1] << "; camera.focal[2] = " << cameras[0].focal[2] << ";" << std::endl;
+    std::cout << "camera.pos[0] = " << cameras[0].pos[0] << "; camera.pos[1] = " << cameras[0].pos[1] << "; camera.pos[2] = " << cameras[0].pos[2] <<";" << std::endl;
+    std::cout << "camera.view[0] = " << cameras[0].view[0] << "; camera.view[1] = " << cameras[0].view[1] << "; camera.view[2] = " << cameras[0].view[2] <<";"<< std::endl;
+    std::cout << "camera.clip[0] = " << cameras[0].clip[0] << "; camera.clip[1] = " << cameras[0].clip[1] << ";" << std::endl;
+    std::cout << "camera.fovy = " << cameras[0].fovy << ";" <<std::endl;
+    std::cout << "camera.window_size[0] = " << cameras[0].window_size[0] << "; camera.window_size[1] = " << cameras[0].window_size[1] << ";" << std::endl;
+    std::cout << "camera.window_pos[0] = " << cameras[0].window_pos[0] << "; camera.window_pos[1] = " << cameras[0].window_pos[1] << ";" << std::endl;
+
 }
 
 
@@ -311,7 +340,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		updateLockVis.unlock();
 		//-- Check whether to update Visualization
-		if (_frameCounter > 20) {
+		if (_frameCounter > 3) {
 			_update = true;
 			_frameCounter = 0;
 		}
@@ -344,7 +373,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			updateLockVis.unlock();
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter >= 20) {
+		if (_frameCounter > 3) {
 			_update = true;
 		}
 	}

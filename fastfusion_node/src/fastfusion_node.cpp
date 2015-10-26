@@ -12,6 +12,13 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //Constructor FastFusionWrapper
 //-- Load Parameters
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
+	distCoeff_ = cv::Mat::zeros(5,1,cv::DataType<double>::type);
+	distCoeff_.at<double>(0,0) = 0.02587;
+	distCoeff_.at<double>(1,0) = -2.45159;
+	distCoeff_.at<double>(2,0) = -0.00081;
+	distCoeff_.at<double>(3,0) = -0.002426;
+	distCoeff_.at<double>(4,0) = 4.63652;
+
 	bool loadSuccess = true;
 	bool threadFusion, threadMeshing, saveMesh;
 	std::string fileLocation;
@@ -64,7 +71,7 @@ void FastFusionWrapper::run() {
 		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
 	}
 
-	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/firefly/blabla/pcl", 5, &FastFusionWrapper::pclCallback,this);
+	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/firefly/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
@@ -77,10 +84,41 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.03){
 		return;
 	}
-	cv::Mat imgDepth;
+	cv::Mat imgDepthDist, imgDepth;
 	ros::Time timeMeas;
 	//-- Convert the incomming messages
-	getDepthImageFromRosMsg(msgDepth, &imgDepth);
+	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
+	//-- Undistort the depth image
+	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	/*
+	cv::Mat imgVis;
+	cv::resize(imgDepth*5, imgVis,cv::Size(642,513),cv::INTER_LINEAR);
+	cv::imshow("Depth Image",imgVis);
+	cv::waitKey(1);
+	*/
+	//imgDepth = imgDepthDist;
+	//-- Compute Point Cloud for testing
+	if (testing_point_cloud_) {
+		cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
+		cv::imwrite("/home/karrer/imgDepthDist.png",imgDepthDist);
+		float fx = (float)intrinsic_.at<double>(0,0);
+		float fy = (float)intrinsic_.at<double>(1,1);
+		float cx = (float)intrinsic_.at<double>(0,2);
+		float cy = (float)intrinsic_.at<double>(1,2);
+		pcl::PointXYZ tempPoint;
+		pcl::PointCloud<pcl::PointXYZ> pointCloud;
+		for (int i = 0; i < imgDepth.rows; i++) {
+			for (int j = 0; j < imgDepth.cols; j++) {
+				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/5000.0f;
+				tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
+				tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
+				pointCloud.push_back(tempPoint);
+			}
+		}
+		pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
+		pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
+		pointCloud.clear();
+	}
 	// Create Dummy RGB Frame
 	cv::Mat imgRGB(imgDepth.rows, imgDepth.cols, CV_8UC3, CV_RGB(200,200,200));
 	//-- Get time stamp of the incoming images
@@ -121,27 +159,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	//-- Convert the incomming messagesb
 	getRGBImageFromRosMsg(msgRGB, &imgRGB);
 	getDepthImageFromRosMsg(msgDepth, &imgDepth);
-	//-- Compute Point Cloud for testing
-	if (testing_point_cloud_) {
-		cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
-		float fx = intrinsic_.at<float>(0,0);
-		float fy = intrinsic_.at<float>(1,1);
-		float cx = intrinsic_.at<float>(0,2);
-		float cy = intrinsic_.at<float>(1,2);
-		pcl::PointXYZ tempPoint;
-		pcl::PointCloud<pcl::PointXYZ> pointCloud;
-		for (int i = 0; i < imgDepth.rows; i++) {
-			for (int j = 0; j < imgDepth.cols; j++) {
-				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/5000.0f;
-				tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
-				tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
-				pointCloud.push_back(tempPoint);
-			}
-		}
-		pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
-		pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
-		pointCloud.clear();
-	}
+
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgRGB->header.stamp;
 	previous_ts_ = timestamp;
@@ -167,6 +185,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 
 
 void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
+	std::cout << "in pcl Callback" << std::endl;
 	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	if (testing_point_cloud_) {

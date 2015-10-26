@@ -48,6 +48,7 @@ protected:
 	ros::NodeHandle node_, nodeLocal_;
 	ros::Time previous_ts_;
 	cv::Mat intrinsic_;
+	cv::Mat distCoeff_;
 	OnlineFusionROS onlinefusion_;
 	image_transport::Subscriber *subscriberOnlyDepth_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
