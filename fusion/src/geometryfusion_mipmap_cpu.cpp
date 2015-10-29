@@ -2834,7 +2834,8 @@ void meshWrapperInterleaved
 		treeinfo *info,
 		volatile int *meshingDone,
 		MeshInterleaved *mesh,
-		std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes
+		std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes,
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud
 )
 {
 	size_t numVerticesQueue = 0;
@@ -2888,7 +2889,7 @@ void meshWrapperInterleaved
 
 
 
-bool FusionMipMapCPU::updateMeshes()
+bool FusionMipMapCPU::updateMeshes(pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud)
 {
 
 	if(_meshingDone==0){
@@ -2919,7 +2920,7 @@ bool FusionMipMapCPU::updateMeshes()
 
 		_meshCellsCopy = _meshCells;
 		_leafParentCopy = _leafParent;
-
+		_threadMeshing = false;
 		if(_threadMeshing){
 			if(_meshThread){
 				_meshThread->join();
@@ -2933,8 +2934,8 @@ bool FusionMipMapCPU::updateMeshes()
 			_meshingStartFrame = _framesAdded;
 //			_meshThread = new boost::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 //					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
-			_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
-					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+			//_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes,currentPointCloud);
 		}
 		else{
 //			fprintf(stderr,"\nUpdating Meshes in same thread");
@@ -2944,7 +2945,7 @@ bool FusionMipMapCPU::updateMeshes()
 //					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
 			eprintf("\nCalling meshWrapperInterleaved without Threading");
 			meshWrapperInterleaved(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
-					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes, currentPointCloud);
 //			separate = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = separate;
 			interleaved = _meshCurrent; _meshCurrent = _meshNext; _meshNext = interleaved;
 			double diffTime;

@@ -14,6 +14,9 @@
 #include "geometryfusion_aos.hpp"
 #include "treeandbrick.hpp"
 #include "treeandbrick_incremental.hpp"
+#include <pcl/common/common_headers.h>
+#include <pcl/PCLPointCloud2.h>
+
 #include <list>
 
 #include <boost/thread.hpp>
@@ -137,7 +140,7 @@ public:
 	MeshSeparate getMeshStructural(unsigned int structureType = 0,MeshSeparate mesh = MeshSeparate(4));
 //	MeshSeparate getMeshMarchingCubesApproximate(MeshSeparate mesh = MeshSeparate(3));
 	CellUpdate &getMeshCellsUpdate();
-	bool updateMeshes();
+	bool updateMeshes(pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud);
 	void updateMeshCellStructure();
 	void beforeUpdateMeshCellStructure();
 	void afterUpdateMeshCellStructure();

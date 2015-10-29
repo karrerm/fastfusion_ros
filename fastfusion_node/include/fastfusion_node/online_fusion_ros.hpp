@@ -91,6 +91,7 @@ public:
 	float _imageDepthScale;
 	float _maxCamDistance;
 
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
 
 	bool _newMesh;
 	bool _fusionActive;
@@ -139,6 +140,7 @@ protected :
 	float _cx; float _cy; float _cz;
 	bool _saveMesh;
 	std::string _fileName;
+
 
 	//-- Probably unused variables (maybe can get rid of them)
 	long long _lastComputedFrame;

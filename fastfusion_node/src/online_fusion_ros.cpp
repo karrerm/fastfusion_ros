@@ -152,7 +152,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 			updateLock.unlock();
 			//-- Add Map and perform update
 			_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
-			_newMesh = _fusion->updateMeshes();
+			_newMesh = _fusion->updateMeshes(_currentPointCloud);
 		}
 	}
 	_fusionActive = false;
@@ -165,6 +165,7 @@ void OnlineFusionROS::visualize() {
 //-- Preliminary visualization: Generate colored Point cloud from the mesh vertexes
 //-- Careful!: No check whether the mesh changes during the point cloud generation is performed--> may cause Problems!!
 	//-- Initialize PCL-Viewer
+	double linewidth = 3.0;
 	bool pointcloudInit = false;
 	//-- Set Camera Viewing Parameters
 	pcl::visualization::Camera camera;
@@ -181,6 +182,7 @@ void OnlineFusionROS::visualize() {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
 	viewer->setCameraParameters(camera,0);
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15);
+
 	//viewer->addCoordinateSystem (0.1);
 	//viewer->initCameraParameters ();
 
@@ -215,28 +217,36 @@ void OnlineFusionROS::visualize() {
     	//-- Draw Camera Frustum
     	viewer->removeShape("t",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
-    			pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),1.0, 0.0, 0.0, "t", 0);
+    			pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),0.0, 1.0, 0.0, "t", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"t",0);
     	viewer->removeShape("r",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
-    			pcl::PointXYZ(br1(0),br1(1),br1(2)),1.0, 0.0, 0.0, "r", 0);
+    			pcl::PointXYZ(br1(0),br1(1),br1(2)),0.0, 1.0, 0.0, "r", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"r",0);
     	viewer->removeShape("b",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
-    			pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),1.0, 0.0, 0.0, "b", 0);
+    			pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),0.0, 1.0, 0.0, "b", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"b",0);
     	viewer->removeShape("l",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
-    			pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),1.0, 0.0, 0.0, "l", 0);
+    			pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),0.0, 1.0, 0.0, "l", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"l",0);
     	viewer->removeShape("tl_c",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),1.0, 0.0, 0.0, "tl_c", 0);
+    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tl_c", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tl_c",0);
     	viewer->removeShape("tr_c",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),1.0, 0.0, 0.0, "tr_c", 0);
+    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tr_c", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tr_c",0);
     	viewer->removeShape("bl_c",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),1.0, 0.0, 0.0, "bl_c", 0);
+    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "bl_c", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"bl_c",0);
     	viewer->removeShape("br_c",0);
     	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),1.0, 0.0, 0.0, "br_c", 0);
+    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "br_c", 0);
+    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"br_c",0);
 
     	//-- Set Camera viewpoint
     	/*
@@ -254,6 +264,7 @@ void OnlineFusionROS::visualize() {
     		//std::vector<pcl::Vertices>  polygons;
     		//pcl::Vertices tempFace;
     		//-- Generate Point cloud from vertexes (!!! O(n)-operation !!!)
+    		std::cout << "copy size = " << _currentMeshInterleaved->vertices.size() << std::endl;
      		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
     			pointTemp.x = _currentMeshInterleaved->vertices[i].x;
     			pointTemp.y = _currentMeshInterleaved->vertices[i].y;
@@ -328,7 +339,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
 		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
-		_fusion->updateMeshes();
+		_fusion->updateMeshes(_currentPointCloud);
 		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
 		if(_pointermeshes[0]) delete _pointermeshes[0];
 		if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
