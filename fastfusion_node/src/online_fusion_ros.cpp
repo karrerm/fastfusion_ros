@@ -298,14 +298,14 @@ void OnlineFusionROS::visualize() {
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
     		if (pointcloudInit) {
-    			viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
-    			//viewer->updatePointCloud(points_ptr,"visualization pc");
+    			//viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
+    			viewer->updatePointCloud(points_ptr,"visualization pc");
     			// Mesh visualization --> slow
     			//viewer->removePolygonMesh("visualization pc");
     			//viewer->addPolygonMesh(triangles,"visualization pc");
     		} else {
-    			viewer->addPointCloud(point_cloud_ptr, "visualization pc");
-    			//viewer->addPointCloud(points_ptr, "visualization pc");
+    			//viewer->addPointCloud(point_cloud_ptr, "visualization pc");
+    			viewer->addPointCloud(points_ptr, "visualization pc");
     			// Mesh visualization --> slow
     			//viewer->addPolygonMesh(triangles,"visualization pc");
     			pointcloudInit = true;

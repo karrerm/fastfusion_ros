@@ -28,8 +28,8 @@ saveMesh : true
 fileLocation : /home/karrer/sampleMesh
 
 # TF Id's
-world_id : /world
-cam_id : /camera
+world_id : /vicon
+cam_id : /realsense_r200
 
 # Define if using Time of flight sensor or not
 use_pmd : false
