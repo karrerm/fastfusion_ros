@@ -91,8 +91,6 @@ public:
 	float _imageDepthScale;
 	float _maxCamDistance;
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
-
 	bool _newMesh;
 	bool _fusionActive;
 	bool _fusionAlive;

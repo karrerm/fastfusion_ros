@@ -81,7 +81,7 @@ void FastFusionWrapper::run() {
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth) {
 	std::cout << "in imageCallbackPico" << std::endl;
-	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.03){
+	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
 		return;
 	}
 	cv::Mat imgDepthDist, imgDepth;

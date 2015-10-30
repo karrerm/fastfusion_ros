@@ -130,7 +130,7 @@ public:
 			volatile long int *poseNumber = NULL);
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<cv::Mat> rgbImages, volatile long int *poseNumber = NULL);
-
+	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud();
 	MeshSeparate getMeshSeparateMarchingCubes(MeshSeparate mesh = MeshSeparate(3));
 	MeshInterleaved getMeshInterleavedMarchingCubes(MeshInterleaved mesh = MeshInterleaved(3));
 //	MeshSeparate getMeshMarchingCubesNonindexed(MeshSeparate mesh = MeshSeparate(3));
@@ -140,7 +140,7 @@ public:
 	MeshSeparate getMeshStructural(unsigned int structureType = 0,MeshSeparate mesh = MeshSeparate(4));
 //	MeshSeparate getMeshMarchingCubesApproximate(MeshSeparate mesh = MeshSeparate(3));
 	CellUpdate &getMeshCellsUpdate();
-	bool updateMeshes(pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud);
+	bool updateMeshes();
 	void updateMeshCellStructure();
 	void beforeUpdateMeshCellStructure();
 	void afterUpdateMeshCellStructure();
@@ -286,6 +286,7 @@ public:
 
 protected:
 
+  void meshWrapperInterleaved(void);
   void queryPointDepthSingle(sidetype px, sidetype py, sidetype pz, sidetype brickLengthTarget);
   void queryBoxDepthSingle(sidetype3 minPos, sidetype3 maxPos, sidetype brickLengthTarget);
 
@@ -305,6 +306,8 @@ protected:
 	bool split();
 	bool setInitialVolume(int minX, int minY, int minZ, int maxX, int maxY, int maxZ);
 
+	// Mutex to block update of point cloud
+	boost::mutex _pointCloudUpdate;
 
 
 
@@ -481,6 +484,7 @@ protected:
 	ParentArray _leafParentCopy;
 	int _meshingDone;
 	MeshSeparate *_meshSeparateCurrent;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
 	MeshSeparate *_meshSeparateNext;
 	MeshInterleaved *_meshCurrent;
 	MeshInterleaved *_meshNext;
