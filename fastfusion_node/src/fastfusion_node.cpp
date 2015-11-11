@@ -71,7 +71,7 @@ void FastFusionWrapper::run() {
 		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
 	}
 
-	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/firefly/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
+	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/camera/depth/points", 5, &FastFusionWrapper::pclCallback,this);
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
@@ -80,7 +80,6 @@ void FastFusionWrapper::run() {
 }
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth) {
-	std::cout << "in imageCallbackPico" << std::endl;
 	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
 		return;
 	}
@@ -89,13 +88,17 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Convert the incomming messages
 	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
 	//-- Undistort the depth image
-	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
-	/*
-	cv::Mat imgVis;
-	cv::resize(imgDepth*5, imgVis,cv::Size(642,513),cv::INTER_LINEAR);
-	cv::imshow("Depth Image",imgVis);
-	cv::waitKey(1);
-	*/
+	//cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	imgDepth = imgDepthDist;
+	if ((msgDepth->header.stamp.sec == 1445610869)) {
+		onlinefusion_._saveScreenshot = true;
+		cv::Mat imgVis;
+		cv::resize(imgDepth*5, imgVis,cv::Size(1284,1026),cv::INTER_LINEAR);
+		cv::imwrite("/home/karrer/Desktop/fbf_video/depth.png",imgVis);
+		//cv::imshow("Depth Image",imgVis);
+		//cv::waitKey(1);
+	}
+
 	//imgDepth = imgDepthDist;
 	//-- Compute Point Cloud for testing
 	if (testing_point_cloud_) {
@@ -109,7 +112,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 		pcl::PointCloud<pcl::PointXYZ> pointCloud;
 		for (int i = 0; i < imgDepth.rows; i++) {
 			for (int j = 0; j < imgDepth.cols; j++) {
-				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/5000.0f;
+				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/1000.0f;
 				tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
 				tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
 				pointCloud.push_back(tempPoint);
@@ -123,6 +126,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	cv::Mat imgRGB(imgDepth.rows, imgDepth.cols, CV_8UC3, CV_RGB(200,200,200));
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgDepth->header.stamp;
+	std::cout << "time = " << timestamp << std::endl;
 	previous_ts_ = timestamp;
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
@@ -149,7 +153,6 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 //-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
 //-- Convert the messages to cv::Mat and wait for tf-transform corresponding to the frames
 //-- Push the data into the fastfusion pipeline for processing.
-	std::cout << "In imageCallback" << std::endl;
 	if ((msgRGB->header.stamp - previous_ts_).toSec() <= 0.03){
 		return;
 	}
@@ -159,7 +162,10 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	//-- Convert the incomming messagesb
 	getRGBImageFromRosMsg(msgRGB, &imgRGB);
 	getDepthImageFromRosMsg(msgDepth, &imgDepth);
-
+	if (testing_point_cloud_) {
+		cv::imwrite("/home/karrer/imgDepthRealsense.png",imgDepth);
+		cv::imwrite("/home/karrer/imgRGB.png",imgRGB);
+	}
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgRGB->header.stamp;
 	previous_ts_ = timestamp;
@@ -185,19 +191,20 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 
 
 void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
-	std::cout << "in pcl Callback" << std::endl;
-	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
+	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	if (testing_point_cloud_) {
-		pcl::io::savePLYFile ("/home/karrer/PointCloud.ply", pcl_cloud, false);
+		pcl::io::savePLYFile ("/home/karrer/PointCloudRealsense.ply", pcl_cloud, false);
+		pcl::io::savePCDFile ("/home/karrer/PointCloudRealsense.pcd", pcl_cloud, false);
+
 	}
 }
 
 void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg) {
 //-- Function to convert ROS-image (RGB) message to OpenCV-Mat.
 	cv::Mat rgbImg2 = cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
+	//*rgbImg= cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
 	cv::resize(rgbImg2,*rgbImg,cv::Size(480,360),cv::INTER_LINEAR);
-	//*rgbImg = cv_bridge::toCvCopy(msgRGB)->image;
 }
 
 void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *depthImg) {

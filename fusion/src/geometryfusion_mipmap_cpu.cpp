@@ -2914,7 +2914,7 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 
 	for(std::list<size_t>::iterator i=_meshCellQueueCurrent.begin();i!=_meshCellQueueCurrent.end();){
 		if(*i>=_meshCellsCopy.size()) fprintf(stderr,"\nERROR:Wrong Index in MeshCell Queue!: %li >= %li",*i,_meshCellsCopy.size());
-		_meshCellsCopy[*i].updateMesh(_treeinfo,_leafParent,_mc);
+		_meshCellsCopy[*i].updateMesh(_treeinfo,_leafParentCopy,_mc);
 		numVerticesQueue += _meshCellsCopy[*i].meshinterleaved->vertices.size();
 		numFacesQueue += _meshCellsCopy[*i].meshinterleaved->faces.size();
 		i++;

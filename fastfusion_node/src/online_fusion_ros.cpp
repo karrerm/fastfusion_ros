@@ -51,6 +51,8 @@ _currentMeshInterleaved(NULL),
 	_fusionAlive = true;
 	_update = false;
 	_runVisualization = true;
+	pointIsClicked = false;
+	sphereIsInitialized = true;
 
 	//-- Create Visualization Thread
 	_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
@@ -174,16 +176,16 @@ void OnlineFusionROS::visualize() {
 	camera.view[0] = -0.336011; camera.view[1] = 0.663623; camera.view[2] = 0.668357;
 	camera.clip[0] = 0.00431195; camera.clip[1] = 4.31195;
 	camera.fovy = 0.8575;
-	camera.window_size[0] = 960; camera.window_size[1] = 540;
+	camera.window_size[0] = 1600; camera.window_size[1] = 1200;
 	camera.window_pos[0] = 0; camera.window_pos[1] = 0;
 
 	std::vector<pcl::visualization::Camera> cameras;
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
 	viewer->setCameraParameters(camera,0);
-	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15);
-
-	//viewer->addCoordinateSystem (0.1);
+	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 30);
+	viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
+	viewer->addCoordinateSystem (1);
 	//viewer->initCameraParameters ();
 
 	cv::Mat K_cv,Ext_cv, R_cv,t_cv;
@@ -248,6 +250,19 @@ void OnlineFusionROS::visualize() {
     			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "br_c", 0);
     	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"br_c",0);
 
+    	if (pointIsClicked) {
+    		pointIsClicked = false;
+    		if (sphereIsInitialized) {
+    			viewer->removeShape("cube",0);
+    			viewer->addCube(cubePos,cubePose, 0.8, 0.8, 0.8, "cube", 0);
+    			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
+    		} else {
+    			sphereIsInitialized = true;
+    			viewer->addCube(cubePos,cubePose, 0.8, 0.8, 0.8, "cube", 0);
+    			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
+    		}
+    	}
+
     	//-- Set Camera viewpoint
     	/*
     	viewer->setCameraPosition(t_cv.at<double>(0,0)-R_cv.at<double>(0,2)*2.5,t_cv.at<double>(1,0)-R_cv.at<double>(1,2)*2.5,
@@ -261,10 +276,9 @@ void OnlineFusionROS::visualize() {
     		boost::mutex::scoped_lock updateLock(_visualizationUpdateMutex);
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
     		pcl::PointXYZRGB pointTemp;
-    		//std::vector<pcl::Vertices>  polygons;
-    		//pcl::Vertices tempFace;
+    		std::vector<pcl::Vertices>  polygons;
+    		pcl::Vertices tempFace;
     		//-- Generate Point cloud from vertexes (!!! O(n)-operation !!!)
-    		std::cout << "copy size = " << _currentMeshInterleaved->vertices.size() << std::endl;
     		//std::cout << "Size of current point cloud = " << _currentPointCloud->size() << std::endl;
 
      		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
@@ -287,19 +301,23 @@ void OnlineFusionROS::visualize() {
     		}
 			*/
     		updateLock.unlock();
-    		//pcl::PolygonMesh triangles;
-    		//pcl::PCLPointCloud2 msg;
-    		//sensor_msgs::PointCloud2 msg;
-    		//pcl::toPCLPointCloud2 (*point_cloud_ptr, msg);
-    		//pcl::toROSMsg(*point_cloud_ptr, msg);
-    		//triangles.cloud = msg;
-    		//triangles.polygons = polygons;
+    		/*
+    		pcl::PolygonMesh triangles;
+    		pcl::PCLPointCloud2 msg;
+    		pcl::toPCLPointCloud2 (*point_cloud_ptr, msg);
+    		triangles.cloud = msg;
+    		triangles.polygons = polygons;
+    		*/
     		//-- Update Viewer
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
     		if (pointcloudInit) {
     			//viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
     			viewer->updatePointCloud(points_ptr,"visualization pc");
+    			/*if (_saveScreenshot) {
+    			viewer->saveScreenshot("/home/karrer/Desktop/fbf_video/pointCloud.png");
+    			_saveScreenshot = false;
+    			}*/
     			// Mesh visualization --> slow
     			//viewer->removePolygonMesh("visualization pc");
     			//viewer->addPolygonMesh(triangles,"visualization pc");
@@ -328,9 +346,21 @@ void OnlineFusionROS::visualize() {
     std::cout << "camera.fovy = " << cameras[0].fovy << ";" <<std::endl;
     std::cout << "camera.window_size[0] = " << cameras[0].window_size[0] << "; camera.window_size[1] = " << cameras[0].window_size[1] << ";" << std::endl;
     std::cout << "camera.window_pos[0] = " << cameras[0].window_pos[0] << "; camera.window_pos[1] = " << cameras[0].window_pos[1] << ";" << std::endl;
-
 }
 
+
+void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*){
+	if (event.getPointIndex () == -1) {
+		return;
+	}
+	pointIsClicked = true;
+	event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
+	cubePos(0) = 0.0f;//(float)clickedPoint.x;
+	cubePos(1) = 0.0f;//(float)clickedPoint.y;
+	cubePos(2) = 0.0f;//(float)clickedPoint.z;
+	cubePose.x() = cubePose.y() = cubePose.z() = 0;
+	cubePose.w() = 1;
+}
 
 
 void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose) {
@@ -371,14 +401,12 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			_fusionThread = new boost::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
 		}
-		std::cout << "Scale = " << _imageDepthScale << std::endl;
 		_currentPose = pose;
 		//-- Lock and update data-queue
 		boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
 		_queueRGB.push(rgbImg);
 		_queueDepth.push(depthImg);
 		_queuePose.push(pose);
-		std::cout << "There are " << _queuePose.size() << " Frames in the queue" << std::endl;
 		updateLock.unlock();
 		_frameCounter++;
 		//--Update Mesh

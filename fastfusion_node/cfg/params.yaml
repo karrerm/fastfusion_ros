@@ -10,7 +10,7 @@ threadFusion : true
 threadMeshing : true
 
 # Scales
-imageScale : 5000.0
+imageScale : 1000.0
 scale : 0.005
 threshold : 0.005
 
@@ -24,9 +24,8 @@ cy : 178.0287322998047 #86.973   #178.0287322998047 #247.053820358135535.4
 depthConsistencyChecks : 500
 
 # Mesh Saving (location + desired Name without ending)
-saveMesh : true
-fileLocation : /home/karrer/sampleMesh
-
+saveMesh : false
+fileLocation : /home/karrer/Poster
 # TF Id's
 world_id : /vicon
 cam_id : /realsense_r200

@@ -16,6 +16,7 @@
 //#include <pcl/features/normal_3d.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/point_picking_event.h>
 //#include <pcl/console/parse.h>
 
 #include <pcl/PolygonMesh.h>
@@ -95,6 +96,8 @@ public:
 	bool _fusionActive;
 	bool _fusionAlive;
 
+	bool _saveScreenshot;
+
 	bool _threadImageReading;
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
 
@@ -116,6 +119,13 @@ protected :
 	boost::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
+	//
+	void pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*);
+	bool pointIsClicked, sphereIsInitialized;
+	pcl::PointXYZ clickedPoint;
+	Eigen::Vector3f cubePos;
+	Eigen::Quaternionf cubePose;
+
 
 	//-- Fusion Thread Members
 	bool _threadFusion;
@@ -138,6 +148,7 @@ protected :
 	float _cx; float _cy; float _cz;
 	bool _saveMesh;
 	std::string _fileName;
+
 
 
 	//-- Probably unused variables (maybe can get rid of them)
