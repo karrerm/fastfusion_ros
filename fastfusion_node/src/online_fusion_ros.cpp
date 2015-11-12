@@ -53,7 +53,7 @@ _currentMeshInterleaved(NULL),
 	_runVisualization = true;
 	pointIsClicked = false;
 	sphereIsInitialized = true;
-
+	numberClickedPoints = 0;
 	//-- Create Visualization Thread
 	_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
 }
@@ -230,8 +230,9 @@ void OnlineFusionROS::visualize() {
 
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
 	viewer->setCameraParameters(camera,0);
+	viewer->setShowFPS (false);
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 30);
-	viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
+	//viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
 	viewer->addCoordinateSystem (1);
 	//viewer->initCameraParameters ();
 
@@ -257,8 +258,35 @@ void OnlineFusionROS::visualize() {
     	t_cv = _currentPose.getTranslation();
     	drawCameraFrustum(viewer, R_cv, t_cv);
 
+
+    	/*
+    	switch (numberClickedPoints) {
+    	case 1:
+    		viewer->removeShape("point0",0);
+    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
+    		break;
+    	case 2:
+    		viewer->removeShape("point0",0);
+    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
+    		viewer->removeShape("point1",0);
+    		viewer->addSphere(clickedPoints[1],0.05,1.0,0.0,0.0,"point1",0);
+    		break;
+    	case 3:
+    		viewer->removeShape("point0",0);
+    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
+    		viewer->removeShape("point1",0);
+    		viewer->addSphere(clickedPoints[1],0.05,1.0,0.0,0.0,"point1",0);
+    		viewer->removeShape("point2",0);
+    		viewer->addSphere(clickedPoints[2],0.05,1.0,0.0,0.0,"point2",0);
+    		break;
+    	case 0:
+    		viewer->removeShape("point0",0);
+    		viewer->removeShape("point1",0);
+    		viewer->removeShape("point2",0);
+    		break;
+    	}
     	if (pointIsClicked) {
-    		pointIsClicked = false;
+    	    		pointIsClicked = false;
     		if (sphereIsInitialized) {
     			std::cout << "Actualize Cube " << std::endl;
     			viewer->removeShape("cube",0);
@@ -274,7 +302,7 @@ void OnlineFusionROS::visualize() {
     			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
     		}
     	}
-
+		*/
 
     	//-- Set Camera viewpoint
     	/*
@@ -363,10 +391,13 @@ void OnlineFusionROS::visualize() {
 
 
 void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*){
+	std::cout << "Callback is working ..." << std::endl;
+	std::cout << "PointIndex: " << event.getPointIndex() << std::endl;
 	if (event.getPointIndex () == -1) {
 		return;
 	}
 	if (numberClickedPoints <= 3) {
+		std::cout << "Adding Points" << std::endl;
 		pcl::PointXYZ clickedPoint;
 		event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
 		clickedPoints.push_back(clickedPoint);
@@ -377,33 +408,37 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 					(clickedPoints[0].z-clickedPoints[1].z));
 			std::cout << "Cube Length = " << cubeSideLength << std::endl;
 			Eigen::Vector3f x_axis, y_axis, z_axis, temp_vec;
+			for (int i = 0; i< 3; i++) {
+				std::cout << "point("<< i+1 << ") = [" << clickedPoints[i].x << "; " << clickedPoints[i].y << "; " <<
+						clickedPoints[i].z << "];" << std::endl;
+			}
 
 			x_axis(0) = (float)(clickedPoints[1].x - clickedPoints[0].x);
 			x_axis(1) = (float)(clickedPoints[1].y - clickedPoints[0].y);
 			x_axis(2) = (float)(clickedPoints[1].z - clickedPoints[0].z);
-			std::cout << "x_axis = " << x_axis << std::endl;
 			x_axis.normalize();
 			temp_vec(0) = clickedPoints[2].x - clickedPoints[0].x;
 			temp_vec(1) = clickedPoints[2].y - clickedPoints[0].y;
 			temp_vec(2) = clickedPoints[2].z - clickedPoints[0].z;
 			z_axis = x_axis.cross(temp_vec);
 			z_axis.normalize();
-			std::cout << "z_axis = " << z_axis << std::endl;
 			y_axis = x_axis.cross(z_axis);
 			y_axis.normalize();
-			Eigen::Matrix3f R, R_inv;
+			Eigen::Matrix3f R;
 			R << x_axis, y_axis, z_axis;
-			R_inv = R.inverse();
-			cubePose = R_inv;
-			cubePos(0) = clickedPoints[0].x + cubeSideLength/2.0f * (x_axis(0) + y_axis(0) + z_axis(0));
-			cubePos(1) = clickedPoints[0].y + cubeSideLength/2.0f * (x_axis(1) + y_axis(1) + z_axis(1));
-			cubePos(2) = clickedPoints[0].z + cubeSideLength/2.0f * (x_axis(2) + y_axis(2) + z_axis(2));
+			std::cout << "R = " << R <<std::endl;
+			if (R.determinant() < 0) {
+				R.col(2) = R.col(2)*(-1);
+			}
+			cubePose = R;
+			cubePos(0) = clickedPoints[0].x; //+ cubeSideLength/2.0f * (x_axis(0) + y_axis(0) + z_axis(0));
+			cubePos(1) = clickedPoints[0].y; // + cubeSideLength/2.0f * (x_axis(1) + y_axis(1) + z_axis(1));
+			cubePos(2) = clickedPoints[0].z; // + cubeSideLength/2.0f * (x_axis(2) + y_axis(2) + z_axis(2));
 
 			numberClickedPoints = 0;
 			clickedPoints.clear();
 			pointIsClicked = true;
 		}
-
 	}
 }
 

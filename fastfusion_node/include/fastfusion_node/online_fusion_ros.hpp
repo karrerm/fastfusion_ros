@@ -118,7 +118,7 @@ protected :
 	bool _update;
 	bool _runVisualization;
 	boost::mutex _visualizationUpdateMutex;
-	//boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
 	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
 	//
