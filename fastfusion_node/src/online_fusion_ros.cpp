@@ -161,6 +161,53 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 	
 }	
 
+void OnlineFusionROS::drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R_cv, cv::Mat &t_cv) {
+	Eigen::Vector3f tl1,tr1,br1,bl1,c1,t;
+	Eigen::Matrix3f R;
+	double linewidth = 3.0;
+	for (int i = 0;i < 3; i++) {
+		for(int j = 0; j<3;j++) {
+			R(i,j) = (float)R_cv.at<double>(i,j);
+		}
+	}
+	t(0) = (float)t_cv.at<double>(0,0); t(1) = (float)t_cv.at<double>(1,0); t(2) = (float)t_cv.at<double>(2,0);
+	tl1 = (R*cameraFrustum_.tl0 + t)*0.5; tr1 = (R*cameraFrustum_.tr0 + t)*0.5; br1 = (R*cameraFrustum_.br0 + t)*0.5;
+	bl1 = (R*cameraFrustum_.bl0 + t)*0.5; c1 = (R*cameraFrustum_.c0 + t)*0.5;
+	//-- Draw Camera Frustum
+	viewer->removeShape("t",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
+			pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),0.0, 1.0, 0.0, "t", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"t",0);
+	viewer->removeShape("r",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
+			pcl::PointXYZ(br1(0),br1(1),br1(2)),0.0, 1.0, 0.0, "r", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"r",0);
+	viewer->removeShape("b",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
+			pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),0.0, 1.0, 0.0, "b", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"b",0);
+	viewer->removeShape("l",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
+			pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),0.0, 1.0, 0.0, "l", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"l",0);
+	viewer->removeShape("tl_c",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
+			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tl_c", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tl_c",0);
+	viewer->removeShape("tr_c",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
+			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tr_c", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tr_c",0);
+	viewer->removeShape("bl_c",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
+			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "bl_c", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"bl_c",0);
+	viewer->removeShape("br_c",0);
+	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
+			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "br_c", 0);
+	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"br_c",0);
+
+}
 
 
 void OnlineFusionROS::visualize() {
@@ -194,12 +241,12 @@ void OnlineFusionROS::visualize() {
 	pcl::PointCloud<pcl::PointXYZ>::Ptr camera_ptr (new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointXYZ camPointTemp;
 	//-- Define Cornerpoints for camera frustum
-	Eigen::Vector3f tl0,tr0,br0,bl0,c0,tl1,tr1,br1,bl1,c1,t;
-	tl0 << -0.24,-0.17,0.4;
-	tr0 << 0.24,-0.17,0.4;
-	br0 << 0.24,0.17,0.4;
-	bl0 << -0.24,0.17,0.4;
-	c0 << 0.0,0.0,0.0;
+	//Eigen::Vector3f tl1,tr1,br1,bl1,c1,t;
+	cameraFrustum_.tl0 << -0.24,-0.17,0.4;
+	cameraFrustum_.tr0 << 0.24,-0.17,0.4;
+	cameraFrustum_.br0 << 0.24,0.17,0.4;
+	cameraFrustum_.bl0 << -0.24,0.17,0.4;
+	cameraFrustum_.c0 << 0.0,0.0,0.0;
 
     while ((!viewer->wasStopped ()) && _runVisualization) {
     	viewer->spinOnce (10);
@@ -208,60 +255,26 @@ void OnlineFusionROS::visualize() {
     	//-- Get Extrinsics
     	R_cv = _currentPose.getRotation();
     	t_cv = _currentPose.getTranslation();
-    	for (int i = 0;i < 3; i++) {
-    		for(int j = 0; j<3;j++) {
-    			R(i,j) = (float)R_cv.at<double>(i,j);
-    		}
-    	}
-    	t(0) = (float)t_cv.at<double>(0,0); t(1) = (float)t_cv.at<double>(1,0); t(2) = (float)t_cv.at<double>(2,0);
-    	//-- Compute Camera Frustum
-    	tl1 = (R*tl0 + t)*0.5; tr1 = (R*tr0 + t)*0.5; br1 = (R*br0 + t)*0.5; bl1 = (R*bl0 + t)*0.5; c1 = (R*c0 + t)*0.5;
-    	//-- Draw Camera Frustum
-    	viewer->removeShape("t",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
-    			pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),0.0, 1.0, 0.0, "t", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"t",0);
-    	viewer->removeShape("r",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
-    			pcl::PointXYZ(br1(0),br1(1),br1(2)),0.0, 1.0, 0.0, "r", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"r",0);
-    	viewer->removeShape("b",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
-    			pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),0.0, 1.0, 0.0, "b", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"b",0);
-    	viewer->removeShape("l",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
-    			pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),0.0, 1.0, 0.0, "l", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"l",0);
-    	viewer->removeShape("tl_c",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tl_c", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tl_c",0);
-    	viewer->removeShape("tr_c",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tr1(0),tr1(1),tr1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "tr_c", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"tr_c",0);
-    	viewer->removeShape("bl_c",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(bl1(0),bl1(1),bl1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "bl_c", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"bl_c",0);
-    	viewer->removeShape("br_c",0);
-    	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(br1(0),br1(1),br1(2)),
-    			pcl::PointXYZ(c1(0),c1(1),c1(2)),0.0, 1.0, 0.0, "br_c", 0);
-    	viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"br_c",0);
+    	drawCameraFrustum(viewer, R_cv, t_cv);
 
     	if (pointIsClicked) {
     		pointIsClicked = false;
     		if (sphereIsInitialized) {
+    			std::cout << "Actualize Cube " << std::endl;
     			viewer->removeShape("cube",0);
-    			viewer->addCube(cubePos,cubePose, 0.8, 0.8, 0.8, "cube", 0);
+    			viewer->addCube(cubePos,cubePose, cubeSideLength, cubeSideLength, cubeSideLength, "cube", 0);
+    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"cube",0);
+    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0,0.0,1.0,"cube",0);
     			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
     		} else {
     			sphereIsInitialized = true;
-    			viewer->addCube(cubePos,cubePose, 0.8, 0.8, 0.8, "cube", 0);
+    			viewer->addCube(cubePos,cubePose, cubeSideLength, cubeSideLength, cubeSideLength, "cube", 0);
+    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"cube",0);
+    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0,0.0,1.0,"cube",0);
     			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
     		}
     	}
+
 
     	//-- Set Camera viewpoint
     	/*
@@ -353,13 +366,45 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 	if (event.getPointIndex () == -1) {
 		return;
 	}
-	pointIsClicked = true;
-	event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
-	cubePos(0) = 0.0f;//(float)clickedPoint.x;
-	cubePos(1) = 0.0f;//(float)clickedPoint.y;
-	cubePos(2) = 0.0f;//(float)clickedPoint.z;
-	cubePose.x() = cubePose.y() = cubePose.z() = 0;
-	cubePose.w() = 1;
+	if (numberClickedPoints <= 3) {
+		pcl::PointXYZ clickedPoint;
+		event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
+		clickedPoints.push_back(clickedPoint);
+		numberClickedPoints++;
+		if (numberClickedPoints == 3) {
+			//-- Estimate Plane and Dimensions of Cube
+			cubeSideLength = std::sqrt((clickedPoints[0].x-clickedPoints[1].x) + (clickedPoints[0].y-clickedPoints[1].y) +
+					(clickedPoints[0].z-clickedPoints[1].z));
+			std::cout << "Cube Length = " << cubeSideLength << std::endl;
+			Eigen::Vector3f x_axis, y_axis, z_axis, temp_vec;
+
+			x_axis(0) = (float)(clickedPoints[1].x - clickedPoints[0].x);
+			x_axis(1) = (float)(clickedPoints[1].y - clickedPoints[0].y);
+			x_axis(2) = (float)(clickedPoints[1].z - clickedPoints[0].z);
+			std::cout << "x_axis = " << x_axis << std::endl;
+			x_axis.normalize();
+			temp_vec(0) = clickedPoints[2].x - clickedPoints[0].x;
+			temp_vec(1) = clickedPoints[2].y - clickedPoints[0].y;
+			temp_vec(2) = clickedPoints[2].z - clickedPoints[0].z;
+			z_axis = x_axis.cross(temp_vec);
+			z_axis.normalize();
+			std::cout << "z_axis = " << z_axis << std::endl;
+			y_axis = x_axis.cross(z_axis);
+			y_axis.normalize();
+			Eigen::Matrix3f R, R_inv;
+			R << x_axis, y_axis, z_axis;
+			R_inv = R.inverse();
+			cubePose = R_inv;
+			cubePos(0) = clickedPoints[0].x + cubeSideLength/2.0f * (x_axis(0) + y_axis(0) + z_axis(0));
+			cubePos(1) = clickedPoints[0].y + cubeSideLength/2.0f * (x_axis(1) + y_axis(1) + z_axis(1));
+			cubePos(2) = clickedPoints[0].z + cubeSideLength/2.0f * (x_axis(2) + y_axis(2) + z_axis(2));
+
+			numberClickedPoints = 0;
+			clickedPoints.clear();
+			pointIsClicked = true;
+		}
+
+	}
 }
 
 

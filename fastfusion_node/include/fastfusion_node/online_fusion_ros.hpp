@@ -76,6 +76,7 @@
 #include <list>
 
 
+
 class OnlineFusionROS
 {
 public:
@@ -117,12 +118,15 @@ protected :
 	bool _update;
 	bool _runVisualization;
 	boost::mutex _visualizationUpdateMutex;
-	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
+	//boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
+	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
 	//
 	void pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*);
 	bool pointIsClicked, sphereIsInitialized;
-	pcl::PointXYZ clickedPoint;
+	std::vector<pcl::PointXYZ> clickedPoints;
+	unsigned int numberClickedPoints;
+	float cubeSideLength;
 	Eigen::Vector3f cubePos;
 	Eigen::Quaternionf cubePose;
 
@@ -172,6 +176,9 @@ protected :
 	bool _createMeshList;
 	bool _lightingEnabled;
 	bool _colorEnabled;
+	struct cameraFrustum{
+		Eigen::Vector3f tl0,tr0,br0,bl0,c0;
+	} cameraFrustum_;
 
 };
 
