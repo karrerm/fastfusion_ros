@@ -16,6 +16,7 @@
 //#include <pcl/features/normal_3d.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/point_picking_event.h>
 //#include <pcl/console/parse.h>
 
 #include <pcl/PolygonMesh.h>
@@ -75,6 +76,7 @@
 #include <list>
 
 
+
 class OnlineFusionROS
 {
 public:
@@ -91,10 +93,11 @@ public:
 	float _imageDepthScale;
 	float _maxCamDistance;
 
-
 	bool _newMesh;
 	bool _fusionActive;
 	bool _fusionAlive;
+
+	bool _saveScreenshot;
 
 	bool _threadImageReading;
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
@@ -117,6 +120,16 @@ protected :
 	boost::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
+	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
+	//
+	void pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*);
+	bool pointIsClicked, sphereIsInitialized;
+	std::vector<pcl::PointXYZ> clickedPoints;
+	unsigned int numberClickedPoints;
+	float cubeSideLength;
+	Eigen::Vector3f cubePos;
+	Eigen::Quaternionf cubePose;
+
 
 	//-- Fusion Thread Members
 	bool _threadFusion;
@@ -140,6 +153,8 @@ protected :
 	bool _saveMesh;
 	std::string _fileName;
 
+
+
 	//-- Probably unused variables (maybe can get rid of them)
 	long long _lastComputedFrame;
 	bool _verbose;
@@ -161,6 +176,9 @@ protected :
 	bool _createMeshList;
 	bool _lightingEnabled;
 	bool _colorEnabled;
+	struct cameraFrustum{
+		Eigen::Vector3f tl0,tr0,br0,bl0,c0;
+	} cameraFrustum_;
 
 };
 

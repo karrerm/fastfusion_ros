@@ -15,18 +15,20 @@ scale : 0.005
 threshold : 0.005
 
 # Camera Intrinsics
-fx : 456.81292724609375 #537.960321985614
-fy : 456.81292724609375 #539.597659163239
-cx : 241.26553344726562 #319.183641033155
-cy : 178.0287322998047 #247.053820358135535.4
+fx : 456.81292724609375 #216.47   #456.81292724609375 #537.960321985614
+fy : 456.81292724609375 #216.47   #456.81292724609375 #539.597659163239
+cx : 241.26553344726562 #107.72   #241.26553344726562 #319.183641033155
+cy : 178.0287322998047 #86.973   #178.0287322998047 #247.053820358135535.4
 
 # Depth Consistency Checks
-depthConsistencyChecks : 100
+depthConsistencyChecks : 500
 
 # Mesh Saving (location + desired Name without ending)
-saveMesh : true
-fileLocation : /home/karrer/meshSteady
-
+saveMesh : false
+fileLocation : /home/karrer/Poster
 # TF Id's
-world_id : /world
-cam_id : /camera
+world_id : /vicon
+cam_id : /realsense_r200
+
+# Define if using Time of flight sensor or not
+use_pmd : false

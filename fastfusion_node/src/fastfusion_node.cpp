@@ -12,6 +12,13 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //Constructor FastFusionWrapper
 //-- Load Parameters
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
+	distCoeff_ = cv::Mat::zeros(5,1,cv::DataType<double>::type);
+	distCoeff_.at<double>(0,0) = 0.02587;
+	distCoeff_.at<double>(1,0) = -2.45159;
+	distCoeff_.at<double>(2,0) = -0.00081;
+	distCoeff_.at<double>(3,0) = -0.002426;
+	distCoeff_.at<double>(4,0) = 4.63652;
+
 	bool loadSuccess = true;
 	bool threadFusion, threadMeshing, saveMesh;
 	std::string fileLocation;
@@ -31,6 +38,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);
 	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);
 	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);
+	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks,
@@ -39,27 +47,105 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
-	//-- Set the corresponding fields
-
+	testing_point_cloud_ = false;
 }
 
 void FastFusionWrapper::run() {
 	ROS_INFO("\nRun Fastfusion .....");
-	// Synchronize the image messages received from Realsense Sensor
-	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberRGB(node_, node_.resolveName("image_rgb"), 5);
-	message_filters::Subscriber<sensor_msgs::Image>
-	subscriberDepth(node_, node_.resolveName("image_depth"), 5);
-	//message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::Image>
-	///sync(subscriberRGB, subscriberDepth, 10);
-	//typedef message_filters::sync_policies::ApproximateTime<Image, Image> MySyncPolicy;
-	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
-	sync(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),subscriberRGB,subscriberDepth);
-	sync.registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
+	if (use_pmd_) {
+		//-- Subscribe to depth image callback
+		image_transport::ImageTransport it(node_);
+		subscriberOnlyDepth_ = new image_transport::Subscriber;
+		*subscriberOnlyDepth_ =	it.subscribe(node_.resolveName("image_depth"), 5, &FastFusionWrapper::imageCallbackPico, this);
+
+	} else {
+		//-- Synchronize the image messages received from Realsense Sensor
+		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
+		subscriberRGB_ = new message_filters::Subscriber<sensor_msgs::Image>;
+
+		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),5);
+		subscriberRGB_->subscribe(node_,node_.resolveName("image_rgb"),5);
+
+		sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
+		(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),*subscriberRGB_,*subscriberDepth_);
+		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
+	}
+
+	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/camera/depth/points", 5, &FastFusionWrapper::pclCallback,this);
+	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
 	onlinefusion_.stop();
 	ros::shutdown();
+}
+
+void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth) {
+	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
+		return;
+	}
+	cv::Mat imgDepthDist, imgDepth;
+	ros::Time timeMeas;
+	//-- Convert the incomming messages
+	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
+	//-- Undistort the depth image
+	//cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	imgDepth = imgDepthDist;
+	if ((msgDepth->header.stamp.sec == 1445610869)) {
+		onlinefusion_._saveScreenshot = true;
+		cv::Mat imgVis;
+		cv::resize(imgDepth*5, imgVis,cv::Size(1284,1026),cv::INTER_LINEAR);
+		cv::imwrite("/home/karrer/Desktop/fbf_video/depth.png",imgVis);
+		//cv::imshow("Depth Image",imgVis);
+		//cv::waitKey(1);
+	}
+
+	//imgDepth = imgDepthDist;
+	//-- Compute Point Cloud for testing
+	if (testing_point_cloud_) {
+		cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
+		cv::imwrite("/home/karrer/imgDepthDist.png",imgDepthDist);
+		float fx = (float)intrinsic_.at<double>(0,0);
+		float fy = (float)intrinsic_.at<double>(1,1);
+		float cx = (float)intrinsic_.at<double>(0,2);
+		float cy = (float)intrinsic_.at<double>(1,2);
+		pcl::PointXYZ tempPoint;
+		pcl::PointCloud<pcl::PointXYZ> pointCloud;
+		for (int i = 0; i < imgDepth.rows; i++) {
+			for (int j = 0; j < imgDepth.cols; j++) {
+				tempPoint.z = (float)imgDepth.at<unsigned short>(i,j)/1000.0f;
+				tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
+				tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
+				pointCloud.push_back(tempPoint);
+			}
+		}
+		pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
+		pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
+		pointCloud.clear();
+	}
+	// Create Dummy RGB Frame
+	cv::Mat imgRGB(imgDepth.rows, imgDepth.cols, CV_8UC3, CV_RGB(200,200,200));
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	std::cout << "time = " << timestamp << std::endl;
+	previous_ts_ = timestamp;
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_,cam_id_,
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+	}
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+	//-- Fuse the imcoming Images into existing map
+	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose);
 }
 
 void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
@@ -76,6 +162,10 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	//-- Convert the incomming messagesb
 	getRGBImageFromRosMsg(msgRGB, &imgRGB);
 	getDepthImageFromRosMsg(msgDepth, &imgDepth);
+	if (testing_point_cloud_) {
+		cv::imwrite("/home/karrer/imgDepthRealsense.png",imgDepth);
+		cv::imwrite("/home/karrer/imgRGB.png",imgRGB);
+	}
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgRGB->header.stamp;
 	previous_ts_ = timestamp;
@@ -87,13 +177,6 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
                     				timestamp, ros::Duration(2.0));
 		tfListener.lookupTransform(world_id_, cam_id_,
 									timestamp, transform);
-		/*
-		ros::Time timeNow = ros::Time::now();
-		tfListener.waitForTransform(world_id_,cam_id_,
-			                    	timeNow, ros::Duration(2.0));
-		tfListener.lookupTransform(world_id_, cam_id_,
-					 	 	 	 	timeNow, transform);
-					 	 	 	 	*/
 	}
 	catch (tf::TransformException ex){
 		ROS_ERROR("%s",ex.what());
@@ -107,11 +190,21 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 }
 
 
+void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
+	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
+	pcl::fromROSMsg (pcl_msg,pcl_cloud);
+	if (testing_point_cloud_) {
+		pcl::io::savePLYFile ("/home/karrer/PointCloudRealsense.ply", pcl_cloud, false);
+		pcl::io::savePCDFile ("/home/karrer/PointCloudRealsense.pcd", pcl_cloud, false);
+
+	}
+}
+
 void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg) {
 //-- Function to convert ROS-image (RGB) message to OpenCV-Mat.
 	cv::Mat rgbImg2 = cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
+	//*rgbImg= cv_bridge::toCvCopy(msgRGB, sensor_msgs::image_encodings::BGR8)->image;
 	cv::resize(rgbImg2,*rgbImg,cv::Size(480,360),cv::INTER_LINEAR);
-	//*rgbImg = cv_bridge::toCvCopy(msgRGB)->image;
 }
 
 void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *depthImg) {

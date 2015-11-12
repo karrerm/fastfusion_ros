@@ -2823,7 +2823,7 @@ MeshInterleaved result(3);
 
 return result;
 }
-
+/*
 void meshWrapperInterleaved
 (
 		std::list<size_t> *meshCellQueue,
@@ -2834,9 +2834,11 @@ void meshWrapperInterleaved
 		treeinfo *info,
 		volatile int *meshingDone,
 		MeshInterleaved *mesh,
-		std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes
+		//std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes,
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud
 )
 {
+	std::cout << "MeshWrapper!!" << std::endl;
 	size_t numVerticesQueue = 0;
 	size_t numFacesQueue = 0;
 
@@ -2869,24 +2871,104 @@ void meshWrapperInterleaved
 	mesh->vertices.reserve(numVerticesTotal);
 	mesh->colors.reserve(numVerticesTotal);
 	mesh->faces.reserve(numFacesTotal);
-
+	currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	pcl::PointXYZRGB tempPoint;
+	unsigned int meshSize = 0;
 	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
 	for(size_t i=0;i<meshcellsSize;i++){
 //		fprintf(stderr," %li",i);
 		*mesh += *((*meshCells)[i].meshinterleaved);
+		meshSize = (*meshCells)[i].meshinterleaved->vertices.size();
+		for (unsigned int j = 0; j < meshSize; j++) {
+			tempPoint.x = (*meshCells)[i].meshinterleaved->vertices[j].x;
+			tempPoint.y = (*meshCells)[i].meshinterleaved->vertices[j].y;
+			tempPoint.z = (*meshCells)[i].meshinterleaved->vertices[j].z;
+			tempPoint.r = (*meshCells)[i].meshinterleaved->colors[j].r;
+			tempPoint.g = (*meshCells)[i].meshinterleaved->colors[j].g;
+			tempPoint.b = (*meshCells)[i].meshinterleaved->colors[j].b;
+			currentPointCloud->push_back(tempPoint);
+
+		}
 	}
+
 //	*mesh = *((*meshCells)[11585].meshinterleaved);
 	double timeAfter = (double)cv::getTickCount();
-
+	std::cout << "Used Time for meshing = " << timeMiddle-timeBefore << ", mesh size = " << currentPointCloud->size() << std::endl;
 	double timeUpdate = timeMiddle-timeBefore;
 	double timeSum = timeAfter-timeMiddle;
 
-	if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
+	//if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
 	eprintf("\nMeshes summed up.");
 	*meshingDone = 0;
 }
+*/
+void FusionMipMapCPU::meshWrapperInterleaved(void)
+{
+	std::cout << "MeshWrapper!!" << std::endl;
+	size_t numVerticesQueue = 0;
+	size_t numFacesQueue = 0;
+
+	size_t oldSize = _meshCellQueueCurrent.size();
+	size_t meshcellsSize = _meshCells.size();
+	double timeBefore = (double)cv::getTickCount();
+
+	for(std::list<size_t>::iterator i=_meshCellQueueCurrent.begin();i!=_meshCellQueueCurrent.end();){
+		if(*i>=_meshCellsCopy.size()) fprintf(stderr,"\nERROR:Wrong Index in MeshCell Queue!: %li >= %li",*i,_meshCellsCopy.size());
+		_meshCellsCopy[*i].updateMesh(_treeinfo,_leafParentCopy,_mc);
+		numVerticesQueue += _meshCellsCopy[*i].meshinterleaved->vertices.size();
+		numFacesQueue += _meshCellsCopy[*i].meshinterleaved->faces.size();
+		i++;
+		_meshCellQueueCurrent.pop_front();
+	}
 
 
+//	(*meshCells)[11585].updateMesh(*info,*leafParent,*mc);
+//	fprintf(stderr,"\nLast leaf for Mesh Cell %li is %i",11585,(*meshCells)[11585].lastLeaf[0]);
+	double timeMiddle = (double)cv::getTickCount();
+
+	*_meshNext = MeshInterleaved(3);
+
+	size_t numVerticesTotal = 0;
+	size_t numFacesTotal = 0;
+	for(unsigned int i=0;i<meshcellsSize;i++){
+		numVerticesTotal += _meshCellsCopy[i].meshinterleaved->vertices.size();
+		numFacesTotal += _meshCellsCopy[i].meshinterleaved->faces.size();
+	}
+	_meshNext->vertices.reserve(numVerticesTotal);
+	_meshNext->colors.reserve(numVerticesTotal);
+	_meshNext->faces.reserve(numFacesTotal);
+	pcl::PointXYZRGB tempPoint;
+	unsigned int meshSize = 0;
+	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
+	boost::mutex::scoped_lock updateLock(_pointCloudUpdate);
+	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	for(size_t i=0;i<meshcellsSize;i++){
+//		fprintf(stderr," %li",i);
+		*_meshNext += *(_meshCellsCopy[i].meshinterleaved);
+		meshSize = _meshCellsCopy[i].meshinterleaved->vertices.size();
+		for (unsigned int j = 0; j < meshSize; j++) {
+			tempPoint.x = _meshCellsCopy[i].meshinterleaved->vertices[j].x;
+			tempPoint.y = _meshCellsCopy[i].meshinterleaved->vertices[j].y;
+			tempPoint.z = _meshCellsCopy[i].meshinterleaved->vertices[j].z;
+			tempPoint.r = _meshCellsCopy[i].meshinterleaved->colors[j].r;
+			tempPoint.g = _meshCellsCopy[i].meshinterleaved->colors[j].g;
+			tempPoint.b = _meshCellsCopy[i].meshinterleaved->colors[j].b;
+			_currentPointCloud->push_back(tempPoint);
+
+		}
+	}
+	updateLock.unlock();
+
+//	*mesh = *((*meshCells)[11585].meshinterleaved);
+	double timeAfter = (double)cv::getTickCount();
+	std::cout << "Used Time for meshing = " << timeMiddle-timeBefore << ", mesh size = " << _currentPointCloud->size() << std::endl;
+	double timeUpdate = timeMiddle-timeBefore;
+	double timeSum = timeAfter-timeMiddle;
+
+	//if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
+	eprintf("\nMeshes summed up.");
+	_meshingDone = 0;
+}
 
 bool FusionMipMapCPU::updateMeshes()
 {
@@ -2919,7 +3001,7 @@ bool FusionMipMapCPU::updateMeshes()
 
 		_meshCellsCopy = _meshCells;
 		_leafParentCopy = _leafParent;
-
+		_threadMeshing = true;
 		if(_threadMeshing){
 			if(_meshThread){
 				_meshThread->join();
@@ -2933,8 +3015,11 @@ bool FusionMipMapCPU::updateMeshes()
 			_meshingStartFrame = _framesAdded;
 //			_meshThread = new boost::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 //					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
-			_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
-					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+			//_meshThread = new boost::thread(boost::bind(meshWrapperInterleave,  &_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes,currentPointCloud,_1,  _2, _3, _4, _5, _6, _7, _8, _9, _10));
+			//_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,_currentPointCloud);
+			_meshThread = new boost::thread(&FusionMipMapCPU::meshWrapperInterleaved,this);
 		}
 		else{
 //			fprintf(stderr,"\nUpdating Meshes in same thread");
@@ -2943,8 +3028,9 @@ bool FusionMipMapCPU::updateMeshes()
 //			meshWrapperSeparate(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
 //					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
 			eprintf("\nCalling meshWrapperInterleaved without Threading");
-			meshWrapperInterleaved(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
-					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+			//meshWrapperInterleaved(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
+			//		&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes, currentPointCloud);
+			meshWrapperInterleaved();
 //			separate = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = separate;
 			interleaved = _meshCurrent; _meshCurrent = _meshNext; _meshNext = interleaved;
 			double diffTime;
@@ -2958,6 +3044,12 @@ bool FusionMipMapCPU::updateMeshes()
 	}
 	return false;
 
+}
+
+pcl::PointCloud<pcl::PointXYZRGB> FusionMipMapCPU::getCurrentPointCloud(void) {
+	boost::mutex::scoped_lock updateLock(_pointCloudUpdate);
+	return *_currentPointCloud;
+	updateLock.unlock();
 }
 
 FloatVertex::FloatVertex_(float px, float py, float pz)
