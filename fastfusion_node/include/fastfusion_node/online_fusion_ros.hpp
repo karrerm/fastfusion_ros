@@ -29,6 +29,11 @@
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
 
+//-- KdTree for NN-search
+#include <pcl/search/kdtree.h>
+#include <pcl/kdtree/kdtree_flann.h>
+
+
 #include <auxiliary/multivector.h>
 
 #include <opencv2/opencv.hpp>

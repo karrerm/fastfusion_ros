@@ -223,7 +223,6 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transform) {
 //-- Function to convert a tf-transformation to the data type CameraInfo (defined in camerautils.hpp in fastfusion)
 //-- The intrinsics are assumed to be constant and are loaded from a parameter file.
-	//TODO: Why are the images never undistorted??
 	CameraInfo result;
 	result.setIntrinsic(intrinsic_);
 

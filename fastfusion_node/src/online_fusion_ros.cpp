@@ -232,7 +232,7 @@ void OnlineFusionROS::visualize() {
 	viewer->setCameraParameters(camera,0);
 	viewer->setShowFPS (false);
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 30);
-	//viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
+	viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
 	viewer->addCoordinateSystem (1);
 	//viewer->initCameraParameters ();
 
@@ -321,7 +321,7 @@ void OnlineFusionROS::visualize() {
     		pcl::Vertices tempFace;
     		//-- Generate Point cloud from vertexes (!!! O(n)-operation !!!)
     		//std::cout << "Size of current point cloud = " << _currentPointCloud->size() << std::endl;
-
+    		/*//-- Not needed since parallel updated in fusion
      		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
     			pointTemp.x = _currentMeshInterleaved->vertices[i].x;
     			pointTemp.y = _currentMeshInterleaved->vertices[i].y;
@@ -331,7 +331,7 @@ void OnlineFusionROS::visualize() {
     			pointTemp.b = _currentMeshInterleaved->colors[i].b;
     			point_cloud_ptr->points.push_back (pointTemp);
     		}
-
+			*/
      		/*
     		for (unsigned int i = 0; i < _currentMeshInterleaved->faces.size();i+= _currentMeshInterleaved->_verticesPerFace){
     			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+0]);
@@ -342,6 +342,8 @@ void OnlineFusionROS::visualize() {
     		}
 			*/
     		updateLock.unlock();
+
+
     		/*
     		pcl::PolygonMesh triangles;
     		pcl::PCLPointCloud2 msg;
@@ -352,6 +354,20 @@ void OnlineFusionROS::visualize() {
     		//-- Update Viewer
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
+    		//-- KdTree for NN-search
+    		std::clock_t begin = std::clock();
+    		pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
+    		kdtree.setInputCloud (points_ptr);
+    		//-- Search nearest Point
+    		pcl::PointXYZRGB searchPoint;
+    		searchPoint.x = 1.0; searchPoint.y = 2.1; searchPoint.z = 0; searchPoint.r = 1; searchPoint.g = 0; searchPoint.b = 0;
+    		std::vector<int> pointIdxNKNSearch(5);
+    		std::vector<float> pointNKNSquaredDistance(5);
+    		kdtree.nearestKSearch (searchPoint, 5, pointIdxNKNSearch, pointNKNSquaredDistance);
+    		std::clock_t end = std::clock();
+    		double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    		std::cout << "Time for kd-tree: " << elapsed_secs << std::endl;
+
     		if (pointcloudInit) {
     			//viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
     			viewer->updatePointCloud(points_ptr,"visualization pc");
@@ -391,8 +407,6 @@ void OnlineFusionROS::visualize() {
 
 
 void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*){
-	std::cout << "Callback is working ..." << std::endl;
-	std::cout << "PointIndex: " << event.getPointIndex() << std::endl;
 	if (event.getPointIndex () == -1) {
 		return;
 	}
@@ -402,6 +416,7 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 		event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
 		clickedPoints.push_back(clickedPoint);
 		numberClickedPoints++;
+		/*
 		if (numberClickedPoints == 3) {
 			//-- Estimate Plane and Dimensions of Cube
 			cubeSideLength = std::sqrt((clickedPoints[0].x-clickedPoints[1].x) + (clickedPoints[0].y-clickedPoints[1].y) +
@@ -439,6 +454,7 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 			clickedPoints.clear();
 			pointIsClicked = true;
 		}
+		*/
 	}
 }
 

@@ -2904,7 +2904,6 @@ void meshWrapperInterleaved
 */
 void FusionMipMapCPU::meshWrapperInterleaved(void)
 {
-	std::cout << "MeshWrapper!!" << std::endl;
 	size_t numVerticesQueue = 0;
 	size_t numFacesQueue = 0;
 
