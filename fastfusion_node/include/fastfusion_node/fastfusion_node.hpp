@@ -15,6 +15,7 @@
 #include "online_fusion_ros.hpp"
 #include <tf_conversions/tf_eigen.h>
 #include <tf/transform_listener.h>
+#include <tf/transform_broadcaster.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -55,7 +56,11 @@ protected:
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> > *sync_;
 
-
+	void broadcastTFchain(ros::Time timestamp);
+	tf::TransformBroadcaster tfBroadcaster1_, tfBroadcaster2_;
+	tf::Transform tf_cam0_imu, tf_depth_cam0;
+	Eigen::Matrix3d R_cam0_imu, R_depth_cam0;
+	Eigen::Vector3d t_cam0_imu, t_depth_cam0;
 	std::string world_id_;
 	std::string cam_id_;
 

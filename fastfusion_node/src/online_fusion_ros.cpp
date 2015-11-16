@@ -234,6 +234,7 @@ void OnlineFusionROS::visualize() {
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 30);
 	viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
 	viewer->addCoordinateSystem (1);
+	viewer->addSphere(cameraCenter_,0.1,1.0,0.0,0.0,"camerCenter",0);
 	//viewer->initCameraParameters ();
 
 	cv::Mat K_cv,Ext_cv, R_cv,t_cv;
@@ -257,7 +258,7 @@ void OnlineFusionROS::visualize() {
     	R_cv = _currentPose.getRotation();
     	t_cv = _currentPose.getTranslation();
     	drawCameraFrustum(viewer, R_cv, t_cv);
-
+    	viewer->updateSphere(cameraCenter_,0.1,1.0,0.0,0.0,"camerCenter");
 
     	/*
     	switch (numberClickedPoints) {
@@ -355,6 +356,7 @@ void OnlineFusionROS::visualize() {
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
     		//-- KdTree for NN-search
+    		/*
     		std::clock_t begin = std::clock();
     		pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
     		kdtree.setInputCloud (points_ptr);
@@ -367,7 +369,7 @@ void OnlineFusionROS::visualize() {
     		std::clock_t end = std::clock();
     		double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
     		std::cout << "Time for kd-tree: " << elapsed_secs << std::endl;
-
+			*/
     		if (pointcloudInit) {
     			//viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
     			viewer->updatePointCloud(points_ptr,"visualization pc");

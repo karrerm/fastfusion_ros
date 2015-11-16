@@ -112,6 +112,7 @@ public:
 	CameraInfo _currentPose;
 	cv::Mat _currentDepthImg;
 
+	pcl::PointXYZ cameraCenter_;
 	//-- Function to stop the fusion
 	void stop();
 

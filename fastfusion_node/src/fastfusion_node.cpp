@@ -13,11 +13,6 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //-- Load Parameters
 	intrinsic_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
 	distCoeff_ = cv::Mat::zeros(5,1,cv::DataType<double>::type);
-	distCoeff_.at<double>(0,0) = 0.02587;
-	distCoeff_.at<double>(1,0) = -2.45159;
-	distCoeff_.at<double>(2,0) = -0.00081;
-	distCoeff_.at<double>(3,0) = -0.002426;
-	distCoeff_.at<double>(4,0) = 4.63652;
 
 	bool loadSuccess = true;
 	bool threadFusion, threadMeshing, saveMesh;
@@ -29,24 +24,86 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("imageScale",imageScale);
 	loadSuccess &= nodeLocal_.getParam("scale",scale);
 	loadSuccess &= nodeLocal_.getParam("threshold",threshold);
+	/*
 	loadSuccess &= nodeLocal_.getParam("fx", intrinsic_.at<double>(0,0));
 	loadSuccess &= nodeLocal_.getParam("fy", intrinsic_.at<double>(1,1));
 	loadSuccess &= nodeLocal_.getParam("cx", intrinsic_.at<double>(0,2));
 	loadSuccess &= nodeLocal_.getParam("cy", intrinsic_.at<double>(1,2));
+	*/
 	loadSuccess &= nodeLocal_.getParam("depthConsistencyChecks", depthChecks);
 	loadSuccess &= nodeLocal_.getParam("saveMesh",saveMesh);
 	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);
 	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);
 	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);
+
+	//-- Read the camera poses
+	XmlRpc::XmlRpcValue T_cam0_imu;
+	loadSuccess &= nodeLocal_.getParam("cam0/T_cam_imu", T_cam0_imu);
+	R_cam0_imu(0, 0) = (double) T_cam0_imu[0][0];
+	R_cam0_imu(0, 1) = (double) T_cam0_imu[0][1];
+	R_cam0_imu(0, 2) = (double) T_cam0_imu[0][2];
+	R_cam0_imu(1, 0) = (double) T_cam0_imu[1][0];
+	R_cam0_imu(1, 1) = (double) T_cam0_imu[1][1];
+	R_cam0_imu(1, 2) = (double) T_cam0_imu[1][2];
+	R_cam0_imu(2, 0) = (double) T_cam0_imu[2][0];
+	R_cam0_imu(2, 1) = (double) T_cam0_imu[2][1];
+	R_cam0_imu(2, 2) = (double) T_cam0_imu[2][2];
+	t_cam0_imu(0) = (double) T_cam0_imu[0][3];
+	t_cam0_imu(1) = (double) T_cam0_imu[1][3];
+	t_cam0_imu(2) = (double) T_cam0_imu[2][3];
+	XmlRpc::XmlRpcValue T_depth_cam0;
+	loadSuccess &= nodeLocal_.getParam("depth/T_depth_cam0", T_depth_cam0);
+	R_depth_cam0(0, 0) = (double) T_depth_cam0[0][0];
+	R_depth_cam0(0, 1) = (double) T_depth_cam0[0][1];
+	R_depth_cam0(0, 2) = (double) T_depth_cam0[0][2];
+	R_depth_cam0(1, 0) = (double) T_depth_cam0[1][0];
+	R_depth_cam0(1, 1) = (double) T_depth_cam0[1][1];
+	R_depth_cam0(1, 2) = (double) T_depth_cam0[1][2];
+	R_depth_cam0(2, 0) = (double) T_depth_cam0[2][0];
+	R_depth_cam0(2, 1) = (double) T_depth_cam0[2][1];
+	R_depth_cam0(2, 2) = (double) T_depth_cam0[2][2];
+	t_depth_cam0(0) = (double) T_depth_cam0[0][3];
+	t_depth_cam0(1) = (double) T_depth_cam0[1][3];
+	t_depth_cam0(2) = (double) T_depth_cam0[2][3];
+	//-- Convert to tf transform for later broadcasting
+	std::cout << "t_depth_cam0 = " << t_depth_cam0 << std::endl;
+	std::cout << "t_cam0_imu = " << t_cam0_imu << std::endl;
+	tf_depth_cam0.setOrigin(tf::Vector3(t_depth_cam0(0), t_depth_cam0(1), t_depth_cam0(2)));
+	tf_cam0_imu.setOrigin(tf::Vector3(t_cam0_imu(0), t_cam0_imu(1), t_cam0_imu(2)));
+	Eigen::Quaterniond q_depth_cam0(R_cam0_imu);
+	Eigen::Quaterniond q_cam0_imu(R_depth_cam0);
+	tf_depth_cam0.setRotation(tf::Quaternion(q_depth_cam0.x(), q_depth_cam0.y(), q_depth_cam0.z(), q_depth_cam0.w()));
+	tf_cam0_imu.setRotation(tf::Quaternion(q_cam0_imu.x(), q_cam0_imu.y(), q_cam0_imu.z(), q_cam0_imu.w()));
+
+	//-- Camera Intrinsics
+	XmlRpc::XmlRpcValue intrinsics_cam0, intrinsics_cam1, intrinsics_depth;
+	loadSuccess &= nodeLocal_.getParam("cam0/intrinsics", intrinsics_cam0);
+	loadSuccess &= nodeLocal_.getParam("cam1/intrinsics", intrinsics_cam1);
+	loadSuccess &= nodeLocal_.getParam("depth/intrinsics", intrinsics_depth);
+	intrinsic_.at<double>(0,0) = (double)intrinsics_depth[0];
+	intrinsic_.at<double>(1,1) = (double)intrinsics_depth[1];
+	intrinsic_.at<double>(0,2) = (double)intrinsics_depth[2];
+	intrinsic_.at<double>(1,2) = (double)intrinsics_depth[3];
+	XmlRpc::XmlRpcValue distortion_cam0, distortion_cam1, distortion_depth;
+	loadSuccess &= nodeLocal_.getParam("cam0/distortion_coeffs", intrinsics_cam0);
+	loadSuccess &= nodeLocal_.getParam("cam1/distortion_coeffs", intrinsics_cam1);
+	loadSuccess &= nodeLocal_.getParam("depth/distortion_coeffs", intrinsics_depth);
+	distCoeff_.at<double>(0,0) = (double)distortion_depth[0];
+	distCoeff_.at<double>(1,0) = (double)distortion_depth[1];
+	distCoeff_.at<double>(2,0) = (double)distortion_depth[2];
+	distCoeff_.at<double>(3,0) = (double)distortion_depth[3];
+	distCoeff_.at<double>(4,0) = (double)distortion_depth[4];
+
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale, (float) scale, (float) threshold, depthChecks,
-								  saveMesh, fileLocation);
+				saveMesh, fileLocation);
 
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
+
 	testing_point_cloud_ = false;
 }
 
@@ -88,17 +145,9 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Convert the incomming messages
 	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
 	//-- Undistort the depth image
-	//cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
-	imgDepth = imgDepthDist;
-	if ((msgDepth->header.stamp.sec == 1445610869)) {
-		onlinefusion_._saveScreenshot = true;
-		cv::Mat imgVis;
-		cv::resize(imgDepth*5, imgVis,cv::Size(1284,1026),cv::INTER_LINEAR);
-		cv::imwrite("/home/karrer/Desktop/fbf_video/depth.png",imgVis);
-		//cv::imshow("Depth Image",imgVis);
-		//cv::waitKey(1);
-	}
-
+	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	cv::imshow("Test",imgDepth);
+	cv::waitKey(5);
 	//imgDepth = imgDepthDist;
 	//-- Compute Point Cloud for testing
 	if (testing_point_cloud_) {
@@ -126,7 +175,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	cv::Mat imgRGB(imgDepth.rows, imgDepth.cols, CV_8UC3, CV_RGB(200,200,200));
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgDepth->header.stamp;
-	std::cout << "time = " << timestamp << std::endl;
+	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
@@ -168,6 +217,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	}
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgRGB->header.stamp;
+	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
@@ -220,6 +270,12 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 }
 
+void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
+	tfBroadcaster1_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", "depth"));
+	tfBroadcaster2_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "camera_imu", "cam0"));
+}
+
+
 CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transform) {
 //-- Function to convert a tf-transformation to the data type CameraInfo (defined in camerautils.hpp in fastfusion)
 //-- The intrinsics are assumed to be constant and are loaded from a parameter file.
@@ -228,11 +284,13 @@ CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transfo
 
 	//-- Convert Message (first convert to eigen)
 	Eigen::Quaterniond q;
-	Eigen::Matrix3d R;
-	Eigen::Vector3d c;
+	Eigen::Matrix3d R_temp,R;
+	Eigen::Vector3d c_temp, c;
  	tf::vectorTFToEigen(transform.getOrigin(), c);
+ 	//c = R_depth_cam0.transpose()*( R_cam0_imu.transpose()*(c_temp - t_cam0_imu)-t_depth_cam0);
  	tf::quaternionTFToEigen(transform.getRotation(), q);
  	R = q.toRotationMatrix();
+ 	//R = R_depth_cam0*R_cam0_imu*R_temp;
 
 	//-- Convert Eigen Matrices to member type of CameraInfo
 	cv::Mat rotation = cv::Mat::eye(3,3,cv::DataType<double>::type);
@@ -247,6 +305,9 @@ CameraInfo FastFusionWrapper::convertTFtoCameraInfo(const tf::Transform& transfo
 		translation.at<double>(i,0) = c(i);
 	}
 	result.setTranslation(translation);
+	onlinefusion_.cameraCenter_.x = c(0);
+	onlinefusion_.cameraCenter_.y = c(1);
+	onlinefusion_.cameraCenter_.z = c(2);
 
 	//-- Return the camera intrinsics/extrinsics in the CameraInfo format
 	return result;
