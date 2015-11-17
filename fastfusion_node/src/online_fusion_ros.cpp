@@ -41,6 +41,7 @@ _currentMeshInterleaved(NULL),
 		 _runFusion(false), _createMeshList(createMeshList)
 ,_lightingEnabled(false)
 ,_colorEnabled(true)
+,_isSetup(false)
 {
 	_meshNumber = 0;
 	_fusionNumber = 0;
@@ -112,6 +113,7 @@ void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float im
 	_threadFusion = fusionThread;
 	_saveMesh = saveMesh;
 	_fileName = fileName;
+	_isSetup = true;
 
 }
 /*  Not needed in this implementation
@@ -171,8 +173,8 @@ void OnlineFusionROS::drawCameraFrustum(boost::shared_ptr<pcl::visualization::PC
 		}
 	}
 	t(0) = (float)t_cv.at<double>(0,0); t(1) = (float)t_cv.at<double>(1,0); t(2) = (float)t_cv.at<double>(2,0);
-	tl1 = (R*cameraFrustum_.tl0 + t)*0.5; tr1 = (R*cameraFrustum_.tr0 + t)*0.5; br1 = (R*cameraFrustum_.br0 + t)*0.5;
-	bl1 = (R*cameraFrustum_.bl0 + t)*0.5; c1 = (R*cameraFrustum_.c0 + t)*0.5;
+	tl1 = (R*cameraFrustum_.tl0 + t); tr1 = (R*cameraFrustum_.tr0 + t); br1 = (R*cameraFrustum_.br0 + t);
+	bl1 = (R*cameraFrustum_.bl0 + t); c1 = (R*cameraFrustum_.c0 + t);
 	//-- Draw Camera Frustum
 	viewer->removeShape("t",0);
 	viewer->addLine<pcl::PointXYZ> (pcl::PointXYZ(tl1(0),tl1(1),tl1(2)),
