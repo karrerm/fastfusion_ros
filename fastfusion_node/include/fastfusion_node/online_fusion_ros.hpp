@@ -107,6 +107,7 @@ public:
 	bool _threadImageReading;
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
 
+	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
 	int _frameCounter;
 	CameraInfo _currentPose;
@@ -118,6 +119,7 @@ public:
 
 
 protected :
+	bool _isSetup;
 	//-- Visualization Members
 	void visualize();
 	boost::thread * _visualizationThread;

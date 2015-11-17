@@ -52,43 +52,73 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	t_cam0_imu(0) = (double) T_cam0_imu[0][3];
 	t_cam0_imu(1) = (double) T_cam0_imu[1][3];
 	t_cam0_imu(2) = (double) T_cam0_imu[2][3];
-	XmlRpc::XmlRpcValue T_depth_cam0;
-	loadSuccess &= nodeLocal_.getParam("depth/T_depth_cam0", T_depth_cam0);
-	R_depth_cam0(0, 0) = (double) T_depth_cam0[0][0];
-	R_depth_cam0(0, 1) = (double) T_depth_cam0[0][1];
-	R_depth_cam0(0, 2) = (double) T_depth_cam0[0][2];
-	R_depth_cam0(1, 0) = (double) T_depth_cam0[1][0];
-	R_depth_cam0(1, 1) = (double) T_depth_cam0[1][1];
-	R_depth_cam0(1, 2) = (double) T_depth_cam0[1][2];
-	R_depth_cam0(2, 0) = (double) T_depth_cam0[2][0];
-	R_depth_cam0(2, 1) = (double) T_depth_cam0[2][1];
-	R_depth_cam0(2, 2) = (double) T_depth_cam0[2][2];
-	t_depth_cam0(0) = (double) T_depth_cam0[0][3];
-	t_depth_cam0(1) = (double) T_depth_cam0[1][3];
-	t_depth_cam0(2) = (double) T_depth_cam0[2][3];
-	//-- Convert to tf transform for later broadcasting
-	std::cout << "t_depth_cam0 = " << t_depth_cam0 << std::endl;
-	std::cout << "t_cam0_imu = " << t_cam0_imu << std::endl;
-	tf_depth_cam0.setOrigin(tf::Vector3(t_depth_cam0(0), t_depth_cam0(1), t_depth_cam0(2)));
+	t_cam0_imu = -R_cam0_imu.transpose()*t_cam0_imu;
 	tf_cam0_imu.setOrigin(tf::Vector3(t_cam0_imu(0), t_cam0_imu(1), t_cam0_imu(2)));
-	Eigen::Quaterniond q_depth_cam0(R_cam0_imu);
-	Eigen::Quaterniond q_cam0_imu(R_depth_cam0);
-	tf_depth_cam0.setRotation(tf::Quaternion(q_depth_cam0.x(), q_depth_cam0.y(), q_depth_cam0.z(), q_depth_cam0.w()));
+	Eigen::Quaterniond q_cam0_imu(R_cam0_imu.transpose());
 	tf_cam0_imu.setRotation(tf::Quaternion(q_cam0_imu.x(), q_cam0_imu.y(), q_cam0_imu.z(), q_cam0_imu.w()));
+	if (use_pmd_) {
+		XmlRpc::XmlRpcValue T_depth_cam0;
+		loadSuccess &= nodeLocal_.getParam("depth/T_depth_cam0", T_depth_cam0);
+		R_depth_cam0(0, 0) = (double) T_depth_cam0[0][0];
+		R_depth_cam0(0, 1) = (double) T_depth_cam0[0][1];
+		R_depth_cam0(0, 2) = (double) T_depth_cam0[0][2];
+		R_depth_cam0(1, 0) = (double) T_depth_cam0[1][0];
+		R_depth_cam0(1, 1) = (double) T_depth_cam0[1][1];
+		R_depth_cam0(1, 2) = (double) T_depth_cam0[1][2];
+		R_depth_cam0(2, 0) = (double) T_depth_cam0[2][0];
+		R_depth_cam0(2, 1) = (double) T_depth_cam0[2][1];
+		R_depth_cam0(2, 2) = (double) T_depth_cam0[2][2];
+		t_depth_cam0(0) = (double) T_depth_cam0[0][3];
+		t_depth_cam0(1) = (double) T_depth_cam0[1][3];
+		t_depth_cam0(2) = (double) T_depth_cam0[2][3];
+		t_depth_cam0 = -R_depth_cam0.transpose()*t_depth_cam0;
+		tf_depth_cam0.setOrigin(tf::Vector3(t_depth_cam0(0), t_depth_cam0(1), t_depth_cam0(2)));
+		Eigen::Quaterniond q_depth_cam0(R_depth_cam0.transpose());
+		tf_depth_cam0.setRotation(tf::Quaternion(q_depth_cam0.x(), q_depth_cam0.y(), q_depth_cam0.z(), q_depth_cam0.w()));
+	} else {
+		XmlRpc::XmlRpcValue T_rgb_cam0;
+		loadSuccess &= nodeLocal_.getParam("rgb/T_rgb_cam0", T_rgb_cam0);
+		R_rgb_cam0(0, 0) = (double) T_rgb_cam0[0][0];
+		R_rgb_cam0(0, 1) = (double) T_rgb_cam0[0][1];
+		R_rgb_cam0(0, 2) = (double) T_rgb_cam0[0][2];
+		R_rgb_cam0(1, 0) = (double) T_rgb_cam0[1][0];
+		R_rgb_cam0(1, 1) = (double) T_rgb_cam0[1][1];
+		R_rgb_cam0(1, 2) = (double) T_rgb_cam0[1][2];
+		R_rgb_cam0(2, 0) = (double) T_rgb_cam0[2][0];
+		R_rgb_cam0(2, 1) = (double) T_rgb_cam0[2][1];
+		R_rgb_cam0(2, 2) = (double) T_rgb_cam0[2][2];
+		t_rgb_cam0(0) = (double) T_rgb_cam0[0][3];
+		t_rgb_cam0(1) = (double) T_rgb_cam0[1][3];
+		t_rgb_cam0(2) = (double) T_rgb_cam0[2][3];
+		t_rgb_cam0 = -R_rgb_cam0.transpose()*t_rgb_cam0;
+		tf_rgb_cam0.setOrigin(tf::Vector3(t_rgb_cam0(0), t_rgb_cam0(1), t_rgb_cam0(2)));
+		Eigen::Quaterniond q_rgb_cam0(R_rgb_cam0.transpose());
+		tf_rgb_cam0.setRotation(tf::Quaternion(q_rgb_cam0.x(), q_rgb_cam0.y(), q_rgb_cam0.z(), q_rgb_cam0.w()));
+	}
 
 	//-- Camera Intrinsics
 	XmlRpc::XmlRpcValue intrinsics_cam0, intrinsics_cam1, intrinsics_depth;
 	loadSuccess &= nodeLocal_.getParam("cam0/intrinsics", intrinsics_cam0);
 	loadSuccess &= nodeLocal_.getParam("cam1/intrinsics", intrinsics_cam1);
-	loadSuccess &= nodeLocal_.getParam("depth/intrinsics", intrinsics_depth);
+	if (use_pmd_) {
+		loadSuccess &= nodeLocal_.getParam("depth/intrinsics", intrinsics_depth);
+	} else {
+		XmlRpc::XmlRpcValue intrinsics_rgb;
+		loadSuccess &= nodeLocal_.getParam("rgb/intrinsics", intrinsics_rgb);
+		intrinsicRGB_ = cv::Mat::eye(3,3,cv::DataType<double>::type);
+		intrinsicRGB_.at<double>(0,0) = (double)intrinsics_rgb[0];
+		intrinsicRGB_.at<double>(1,1) = (double)intrinsics_rgb[1];
+		intrinsicRGB_.at<double>(0,2) = (double)intrinsics_rgb[2];
+		intrinsicRGB_.at<double>(1,2) = (double)intrinsics_rgb[3];
+	}
 	intrinsic_.at<double>(0,0) = (double)intrinsics_depth[0];
 	intrinsic_.at<double>(1,1) = (double)intrinsics_depth[1];
 	intrinsic_.at<double>(0,2) = (double)intrinsics_depth[2];
 	intrinsic_.at<double>(1,2) = (double)intrinsics_depth[3];
 	XmlRpc::XmlRpcValue distortion_cam0, distortion_cam1, distortion_depth;
-	loadSuccess &= nodeLocal_.getParam("cam0/distortion_coeffs", intrinsics_cam0);
-	loadSuccess &= nodeLocal_.getParam("cam1/distortion_coeffs", intrinsics_cam1);
-	loadSuccess &= nodeLocal_.getParam("depth/distortion_coeffs", intrinsics_depth);
+	loadSuccess &= nodeLocal_.getParam("cam0/distortion_coeffs", distortion_cam0);
+	loadSuccess &= nodeLocal_.getParam("cam1/distortion_coeffs", distortion_cam1);
+	loadSuccess &= nodeLocal_.getParam("depth/distortion_coeffs", distortion_depth);
 	distCoeff_.at<double>(0,0) = (double)distortion_depth[0];
 	distCoeff_.at<double>(1,0) = (double)distortion_depth[1];
 	distCoeff_.at<double>(2,0) = (double)distortion_depth[2];
@@ -103,7 +133,9 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
-
+	while (!onlinefusion_.isSetup()){
+		//-- Waiting for onlinefusion to be setup
+	}
 	testing_point_cloud_ = false;
 }
 
@@ -271,8 +303,12 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 }
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
-	tfBroadcaster1_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", "depth"));
-	tfBroadcaster2_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "camera_imu", "cam0"));
+	if (use_pmd_) {
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", "depth"));
+	} else {
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", "camera_color_optical_frame"));
+	}
+	tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "camera_imu", "cam0"));
 }
 
 

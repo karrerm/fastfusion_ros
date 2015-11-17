@@ -4,7 +4,7 @@
 	
 	<!-- Run Bagfile -->
      <node pkg="rosbag" type="play" name="player" output="screen"   
-      args="/home/karrer/Desktop/BoilerBag/Picoflexx/Mode0/boiler_mode0_1.bag" />
+      args="/home/karrer/Desktop/Sunday/PicoflexxBag/office_mode3_1.bag" />
       
 	<!-- Run rovio -->
      <!--node  name="rovio" pkg="rovio" type="test_rovio"     

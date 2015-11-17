@@ -48,7 +48,7 @@ protected:
 	//-- ROS node handle
 	ros::NodeHandle node_, nodeLocal_;
 	ros::Time previous_ts_;
-	cv::Mat intrinsic_;
+	cv::Mat intrinsic_, intrinsicRGB_;
 	cv::Mat distCoeff_;
 	OnlineFusionROS onlinefusion_;
 	image_transport::Subscriber *subscriberOnlyDepth_;
@@ -57,10 +57,12 @@ protected:
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> > *sync_;
 
 	void broadcastTFchain(ros::Time timestamp);
-	tf::TransformBroadcaster tfBroadcaster1_, tfBroadcaster2_;
-	tf::Transform tf_cam0_imu, tf_depth_cam0;
-	Eigen::Matrix3d R_cam0_imu, R_depth_cam0;
-	Eigen::Vector3d t_cam0_imu, t_depth_cam0;
+	tf::TransformBroadcaster tfBroadcaster_;
+	tf::Transform tf_cam0_imu;
+	tf::Transform tf_depth_cam0;				// When using ToF camera
+	tf::Transform tf_rgb_cam0;				// When using Realsense
+	Eigen::Matrix3d R_cam0_imu, R_depth_cam0, R_rgb_cam0;
+	Eigen::Vector3d t_cam0_imu, t_depth_cam0, t_rgb_cam0;
 	std::string world_id_;
 	std::string cam_id_;
 
