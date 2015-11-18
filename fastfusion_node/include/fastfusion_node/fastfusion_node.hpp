@@ -40,7 +40,7 @@ protected:
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *dephtImg);
-
+	void registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg);
 
 	//-- Pose Message to eigen (Rotation Matrix + Translation)
 	tf::TransformListener tfListener;
@@ -49,7 +49,8 @@ protected:
 	ros::NodeHandle node_, nodeLocal_;
 	ros::Time previous_ts_;
 	cv::Mat intrinsic_, intrinsicRGB_;
-	cv::Mat distCoeff_;
+	cv::Mat distCoeff_, distCoeffRGB_;
+
 	OnlineFusionROS onlinefusion_;
 	image_transport::Subscriber *subscriberOnlyDepth_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
