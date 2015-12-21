@@ -36,11 +36,13 @@ public:
 protected:
 	//-- Image Message Callback
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
-	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msg_depth);
+	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msg_depth, const sensor_msgs::ImageConstPtr& msgConf);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
+	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
 	void getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *dephtImg);
 	void registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg);
+	void depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected);
 
 	//-- Pose Message to eigen (Rotation Matrix + Translation)
 	tf::TransformListener tfListener;
@@ -50,9 +52,11 @@ protected:
 	ros::Time previous_ts_;
 	cv::Mat intrinsic_, intrinsicRGB_;
 	cv::Mat distCoeff_, distCoeffRGB_;
+	cv::Mat depthCorrection_;
+	double imageScale_;
 
 	OnlineFusionROS onlinefusion_;
-	image_transport::Subscriber *subscriberOnlyDepth_;
+	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> > *sync_;
@@ -62,13 +66,16 @@ protected:
 	tf::Transform tf_cam0_imu;
 	tf::Transform tf_depth_cam0;				// When using ToF camera
 	tf::Transform tf_rgb_cam0;				// When using Realsense
-	Eigen::Matrix3d R_cam0_imu, R_depth_cam0, R_rgb_cam0;
-	Eigen::Vector3d t_cam0_imu, t_depth_cam0, t_rgb_cam0;
+	tf::Transform tf_body_cam;				// Transfrom VICON-Body to imu
+	Eigen::Matrix3d R_cam0_imu, R_depth_cam0, R_rgb_cam0, R_body_cam;
+	Eigen::Vector3d t_cam0_imu, t_depth_cam0, t_rgb_cam0, t_body_cam;
 	std::string world_id_;
 	std::string cam_id_;
 
 	bool use_pmd_;
 	bool testing_point_cloud_;
+	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
+	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrameTrans_;
 };
 
 
