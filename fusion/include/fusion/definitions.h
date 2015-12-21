@@ -201,7 +201,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 
 #define MAXCAMDISTANCE 4.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 10.0
+#define MIN_WEIGHT_FOR_SURFACE 0.0
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
@@ -227,7 +227,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define DISTANCETHRESHOLD 0.5f // stable
 //#define DISTANCETHRESHOLD 0.05f // current
 //#define DISTANCETHRESHOLD 0.02f // current
-#define DISTANCETHRESHOLD 0.5f // test
+#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 1.0f
 
