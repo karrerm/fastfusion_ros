@@ -88,7 +88,7 @@ public:
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
 	//-- Initialization of the parameters read from the ROS parameter file
-	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
 			   bool saveMesh, std::string fileName);
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;

@@ -102,10 +102,10 @@ void OnlineFusionROS::stop() {
 }
 
 
-void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
 								bool saveMesh, std::string fileName){
 //-- Initialize FusionMipMapCPU-class (_fusion)
-	_fusion = new FusionMipMapCPU(0,0,0,scale,threshold,0,true);
+	_fusion = new FusionMipMapCPU(0,0,0,scale,distThreshold,0,true);
 	_fusion->setThreadMeshing(meshingThread);
 	_fusion->setDepthChecks(depthChecks);
 	_imageDepthScale = imageScale;
