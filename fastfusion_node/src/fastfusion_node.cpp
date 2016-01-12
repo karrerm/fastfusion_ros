@@ -34,10 +34,11 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);					// Frame id of origin
 	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);						// Frame id of depth camera
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);						// Use ToF of RGBD
-
+	std::cout << "Parameters: " << loadSuccess << std::endl;
 	//-- Read Camera to IMU transformation
 	XmlRpc::XmlRpcValue T_cam0_imu;
 	loadSuccess &= nodeLocal_.getParam("cam0/T_cam_imu", T_cam0_imu);
+	std::cout << "T_cam0_imu: " << loadSuccess << std::endl;
 	R_cam0_imu(0, 0) = (double) T_cam0_imu[0][0];
 	R_cam0_imu(0, 1) = (double) T_cam0_imu[0][1];
 	R_cam0_imu(0, 2) = (double) T_cam0_imu[0][2];
@@ -73,6 +74,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		t_depth_cam0 = -R_depth_cam0.transpose()*t_depth_cam0;
 		tf_depth_cam0.setOrigin(tf::Vector3(t_depth_cam0(0), t_depth_cam0(1), t_depth_cam0(2)));
 		Eigen::Quaterniond q_depth_cam0(R_depth_cam0.transpose());
+		std::cout << R_depth_cam0 << std::endl;
 		tf_depth_cam0.setRotation(tf::Quaternion(q_depth_cam0.x(), q_depth_cam0.y(), q_depth_cam0.z(), q_depth_cam0.w()));
 		//-- Depth Correction
 		XmlRpc::XmlRpcValue depthCorrection;
@@ -86,6 +88,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		XmlRpc::XmlRpcValue T_rgb_cam0;
 		loadSuccess &= nodeLocal_.getParam("rgb/T_rgb_cam0", T_rgb_cam0);
+		std::cout << "T_rgb_cam0: " << loadSuccess << std::endl;
 		R_rgb_cam0(0, 0) = (double) T_rgb_cam0[0][0];
 		R_rgb_cam0(0, 1) = (double) T_rgb_cam0[0][1];
 		R_rgb_cam0(0, 2) = (double) T_rgb_cam0[0][2];
@@ -126,7 +129,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	//-- Camera Intrinsics
 	XmlRpc::XmlRpcValue intrinsics_cam0, intrinsics_cam1, intrinsics_depth;
 	loadSuccess &= nodeLocal_.getParam("cam0/intrinsics", intrinsics_cam0);
-	loadSuccess &= nodeLocal_.getParam("cam1/intrinsics", intrinsics_cam1);
+	//loadSuccess &= nodeLocal_.getParam("cam1/intrinsics", intrinsics_cam1);
 	loadSuccess &= nodeLocal_.getParam("depth/intrinsics", intrinsics_depth);
 	intrinsic_.at<double>(0,0) = (double)intrinsics_depth[0];
 	intrinsic_.at<double>(1,1) = (double)intrinsics_depth[1];
@@ -134,7 +137,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	intrinsic_.at<double>(1,2) = (double)intrinsics_depth[3];
 	XmlRpc::XmlRpcValue distortion_cam0, distortion_cam1, distortion_depth;
 	loadSuccess &= nodeLocal_.getParam("cam0/distortion_coeffs", distortion_cam0);
-	loadSuccess &= nodeLocal_.getParam("cam1/distortion_coeffs", distortion_cam1);
+	//loadSuccess &= nodeLocal_.getParam("cam1/distortion_coeffs", distortion_cam1);
 	loadSuccess &= nodeLocal_.getParam("depth/distortion_coeffs", distortion_depth);
 	distCoeff_.at<double>(0,0) = (double)distortion_depth[0];
 	distCoeff_.at<double>(1,0) = (double)distortion_depth[1];
@@ -230,7 +233,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
 			if (imgConf.at<unsigned char>(v,u)!= 255) {
-				imgDepthCorr.at<unsigned short>(v,u) = 0;
+				imgDepthCorr.at<unsigned short>(v,u) = 65000;
 			}
 		}
 	}
@@ -246,9 +249,9 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	tf::StampedTransform transform;
 	try{
 		ros::Time nowTime = ros::Time::now();
-		tfListener.waitForTransform(world_id_,"depth",
+		tfListener.waitForTransform(world_id_, cam_id_,
 				timestamp, ros::Duration(2.0));
-		tfListener.lookupTransform(world_id_, "depth",
+		tfListener.lookupTransform(world_id_, cam_id_,
 				timestamp, transform);
 	}
 	catch (tf::TransformException ex){
@@ -333,9 +336,9 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 			x = (((double) u) - cx)/fx;
 			y = (((double) v) - cy)/fy;
 			//lambda = ((double) depthPtr[u])/imageScale_*1000.0; 		// Parameters assume depth in [mm]
-			lambda = ((double) imgDepth.at<unsigned short>(v,u))/imageScale_;
+			lambda = ((double) imgDepth.at<unsigned short>(v,u))*std::sqrt(x*x + y*y + 1)/imageScale_;
 			depthCorrected = d0 + (1.0 + d1)*lambda + d2*x + d3*y + d4*lambda*lambda + d5*lambda*lambda*lambda;
-			depthCorrected = depthCorrected*imageScale_;			// Conversion back to scaled uint16
+			depthCorrected = depthCorrected*imageScale_/std::sqrt(x*x + y*y + 1);			// Conversion back to scaled uint16
 			imgDepthCorrected->at<unsigned short>(v,u) = (unsigned short) depthCorrected;
 			//depthCorrPtr[v] = (unsigned short) depthCorrected;
 		}
@@ -486,9 +489,9 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", "depth"));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
 	} else {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", "camera_color_optical_frame"));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
 	tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
 	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "imu", "cam0"));
