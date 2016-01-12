@@ -11,15 +11,15 @@ threadMeshing : true
 
 # Scales
 imageScale : 5000.0
-scale : 0.01
-distanceThreshold : 0.01
+scale : 0.008
+distanceThreshold : 0.02
 
 # Depth Consistency Checks
 depthConsistencyChecks : 10
 
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
-fileLocation : /home/karrer/Poster
+fileLocation : /home/karrer/Boiler1
 # TF Id's
 world_id : /vicon
 cam_id : /depth
