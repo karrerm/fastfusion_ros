@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="ISO-8859-15"?>
+<launch>
+	<arg name="slam_name" value="/picoflexx/cam0"/>
+	
+	<!-- Run Bagfile -->
+     <node pkg="rosbag" type="play" name="player" output="screen"   
+      args="/home/karrer/Desktop/Dataset3/2016_Jan_09/Picoflexx/Desk/Mode1/desk_mode1_run3.bag" />
+ 
+	<!-- Run rovio -->
+     <!--node  name="rovio" pkg="rovio" type="test_rovio"     
+     clear_params="true" output="screen" --> 
+     <!--node-->
+
+	<!-- Run fastfusion_node-->
+	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
+		<!--remap from="image_rgb"			to="$(arg slam_name)/color/image_raw" -->
+		<remap from="image_depth"		to="$(arg slam_name)/depth/image_raw" />
+		<remap from="image_conf"		to="$(arg slam_name)/confidence/image_raw" />
+	<!-- Load parameters -->
+ 	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
+	<rosparam file="$(find fastfusion_node)/cfg/camchain_pico.yaml"/>
+	</node>
+	
+	
+      
+	<!--node  name="$(arg slam_name)" pkg="slam_simulation_node" type="slam_simulation_node" clear_params="true" output="screen" -->
+		<!-- Specify if images need to be undistorted -->
+		<!--remap from="/ref"				to="/world" -->
+		<!--param name="undistort_images" value="true"-->
+		<!-- Load parameters -->
+		<!--rosparam file="$(find slam_simulation_node)/cfg/params.yaml" -->
+	<!--node-->
+</launch>

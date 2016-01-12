@@ -29,6 +29,11 @@
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
 
+//-- KdTree for NN-search
+#include <pcl/search/kdtree.h>
+#include <pcl/kdtree/kdtree_flann.h>
+
+
 #include <auxiliary/multivector.h>
 
 #include <opencv2/opencv.hpp>
@@ -83,7 +88,7 @@ public:
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
 	//-- Initialization of the parameters read from the ROS parameter file
-	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
 			   bool saveMesh, std::string fileName);
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
@@ -102,16 +107,19 @@ public:
 	bool _threadImageReading;
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
 
+	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
 	int _frameCounter;
 	CameraInfo _currentPose;
 	cv::Mat _currentDepthImg;
 
+	pcl::PointXYZ cameraCenter_;
 	//-- Function to stop the fusion
 	void stop();
 
 
 protected :
+	bool _isSetup;
 	//-- Visualization Members
 	void visualize();
 	boost::thread * _visualizationThread;
