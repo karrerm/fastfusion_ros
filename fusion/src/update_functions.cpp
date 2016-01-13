@@ -1647,6 +1647,7 @@ void update8AddLoopAVXSingleInteger
 							_mm256_rcp_ps(
 									_mm256_sub_ps(thresholdWeight,_mm256_set1_ps(DISTANCEWEIGHTEPSILON))));
 
+			//-- Insert Addaptive Weighting here
 			__m256 wInc =
 					_mm256_and_ps(
 							_mm256_add_ps(maskFront,_mm256_mul_ps(weightFall,maskBack)),
