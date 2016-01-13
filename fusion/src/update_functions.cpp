@@ -1184,6 +1184,7 @@ void update8AddLoopSSESingleInteger
 
 #ifdef OWNAVX
 #pragma message "Compiling AVX and AVX2 voxel update function"
+
 void update8AddLoopAVXSingleInteger
 (
 		const ushort *depth, float scaling, float maxcamdistance, const uchar *rgb,
@@ -1201,6 +1202,7 @@ void update8AddLoopAVXSingleInteger
 		colortype3 *_color
 )
 {
+//-- Update Function which does not take any depth noise information into account (implemented by default)
 	volumetype threadOffset = brickIdx*512;
 	float fleafScale = (float)(leafScale)*scale;
 	float ox = (m11*o.x+m12*o.y+m13*o.z)*scale + m14;
@@ -1442,6 +1444,279 @@ void update8AddLoopAVXSingleInteger
 		}
 	}
 }
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 13.01.2016
+void update8AddLoopAVXSingleInteger
+(
+		const ushort *depth, const float *depthNoise,float scaling, float maxcamdistance, const uchar *rgb,
+		int imageWidth, int imageHeight,
+		float &m11, float &m12, float &m13, float &m14,
+		float &m21, float &m22, float &m23, float &m24,
+		float &m31, float &m32, float &m33, float &m34,
+		float &fx, float &fy, float &cx, float &cy,
+		float &scale, float &distanceThreshold,
+		volumetype &brickIdx,
+		sidetype3 &o,
+		sidetype &leafScale,
+		float *_distance,
+		weighttype *_weights,
+		colortype3 *_color
+)
+{
+//-- Update Function which uses the available depth noise information for the SDF update.
+
+
+	volumetype threadOffset = brickIdx*512;
+	float fleafScale = (float)(leafScale)*scale;
+	float ox = (m11*o.x+m12*o.y+m13*o.z)*scale + m14;
+	float oy = (m21*o.x+m22*o.y+m23*o.z)*scale + m24;
+	float oz = (m31*o.x+m32*o.y+m33*o.z)*scale + m34;
+//	float pxx, pxy, pxz, pyx, pyy, pyz, pzx, pzy, pzz;
+	float pyx, pyy, pyz, pzx, pzy, pzz;
+
+
+	float d11 = m11*fleafScale;
+	float d21 = m21*fleafScale;
+	float d31 = m31*fleafScale;
+	//-- 256 Bit vector initialization
+	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
+	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
+	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
+	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);				// Initializes 8 times with distanceThreshold*leafScale
+	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
+
+	float d12 = m12*fleafScale;
+	float d22 = m22*fleafScale;
+	float d32 = m32*fleafScale;
+
+	float d13 = m13*fleafScale;
+	float d23 = m23*fleafScale;
+	float d33 = m33*fleafScale;
+
+	//-- Serialized Update Algorithm (Algorithm 2 in Steinbrücker etal. icra2014)
+	pzx=ox;pzy=oy;pzz=oz;
+	for(int z=0;z<8;z++,pzx+=d13,pzy+=d23,pzz+=d33){
+		pyx=pzx;pyy=pzy;pyz=pzz;
+		for(int y=0;y<8;y++,pyx+=d12,pyy+=d22,pyz+=d32){
+
+
+			volumetype idx = threadOffset; threadOffset+=8;
+			__m256 pxx_AVX =  _mm256_add_ps(_mm256_set1_ps(pyx),d11_AVX);
+			__m256 pxy_AVX =  _mm256_add_ps(_mm256_set1_ps(pyy),d21_AVX);
+			__m256 pxz_AVX =  _mm256_add_ps(_mm256_set1_ps(pyz),d31_AVX);
+
+			// float length = sqrtf(pxx*pxx+pxy*pxy+pxz*pxz);
+			__m256 length = _mm256_sqrt_ps(_mm256_add_ps(_mm256_add_ps(
+					_mm256_mul_ps(pxx_AVX,pxx_AVX),_mm256_mul_ps(pxy_AVX,pxy_AVX)),_mm256_mul_ps(pxz_AVX,pxz_AVX)));
+
+			__m256 reciprocal = _mm256_rcp_ps(pxz_AVX);
+			// int imx = (int)floor(pxx/pxz*fx+cx);
+			__m256i imx = _mm256_cvtps_epi32(_mm256_add_ps(_mm256_set1_ps(cx),_mm256_mul_ps(_mm256_set1_ps(fx),_mm256_mul_ps(pxx_AVX,reciprocal))));
+			// int imy = (int)floor(pxy/pxz*fy+cy);
+			__m256i imy = _mm256_cvtps_epi32(_mm256_add_ps(_mm256_set1_ps(cy),_mm256_mul_ps(_mm256_set1_ps(fy),_mm256_mul_ps(pxy_AVX,reciprocal))));
+
+
+			// int imageIndex = imy*(imy>=0 && imy<imageHeight)*imageWidth + imx*(imx>=0 && imx<imageWidth);
+			ALIGNED int imageIndex[8];
+			 _mm256_store_si256((__m256i*)imageIndex,
+				 _mm256_add_epi32(
+					 _mm256_mullo_epi32(
+						 _mm256_set1_epi32(imageWidth),
+							 _mm256_max_epi32(_mm256_min_epi32(imy,_mm256_set1_epi32(imageHeight-1)),_mm256_setzero_si256())),
+								 _mm256_max_epi32(_mm256_min_epi32(imx,_mm256_set1_epi32(imageWidth-1)),_mm256_setzero_si256())));
+
+			ALIGNED float h8[8] = {
+					(float)(depth[imageIndex[0]]),
+					(float)(depth[imageIndex[1]]),
+					(float)(depth[imageIndex[2]]),
+					(float)(depth[imageIndex[3]]),
+					(float)(depth[imageIndex[4]]),
+					(float)(depth[imageIndex[5]]),
+					(float)(depth[imageIndex[6]]),
+					(float)(depth[imageIndex[7]])};
+
+			ALIGNED float noise8[8] = {
+					(float)(depthNoise[imageIndex[0]]),
+					(float)(depthNoise[imageIndex[1]]),
+					(float)(depthNoise[imageIndex[2]]),
+					(float)(depthNoise[imageIndex[3]]),
+					(float)(depthNoise[imageIndex[4]]),
+					(float)(depthNoise[imageIndex[5]]),
+					(float)(depthNoise[imageIndex[6]]),
+					(float)(depthNoise[imageIndex[7]])};
+
+			ALIGNED float rInc8[8] = {
+					(float)(rgb[imageIndex[0]*3+2]),
+					(float)(rgb[imageIndex[1]*3+2]),
+					(float)(rgb[imageIndex[2]*3+2]),
+					(float)(rgb[imageIndex[3]*3+2]),
+					(float)(rgb[imageIndex[4]*3+2]),
+					(float)(rgb[imageIndex[5]*3+2]),
+					(float)(rgb[imageIndex[6]*3+2]),
+					(float)(rgb[imageIndex[7]*3+2])};
+			ALIGNED float gInc8[8] = {
+					(float)(rgb[imageIndex[0]*3+1]),
+					(float)(rgb[imageIndex[1]*3+1]),
+					(float)(rgb[imageIndex[2]*3+1]),
+					(float)(rgb[imageIndex[3]*3+1]),
+					(float)(rgb[imageIndex[4]*3+1]),
+					(float)(rgb[imageIndex[5]*3+1]),
+					(float)(rgb[imageIndex[6]*3+1]),
+					(float)(rgb[imageIndex[7]*3+1])};
+			ALIGNED float bInc8[8] = {
+					(float)(rgb[imageIndex[0]*3+0]),
+					(float)(rgb[imageIndex[1]*3+0]),
+					(float)(rgb[imageIndex[2]*3+0]),
+					(float)(rgb[imageIndex[3]*3+0]),
+					(float)(rgb[imageIndex[4]*3+0]),
+					(float)(rgb[imageIndex[5]*3+0]),
+					(float)(rgb[imageIndex[6]*3+0]),
+					(float)(rgb[imageIndex[7]*3+0])};
+
+			ALIGNED float rAcc8[8] = {
+					(float)(_color[idx+0].x),
+					(float)(_color[idx+1].x),
+					(float)(_color[idx+2].x),
+					(float)(_color[idx+3].x),
+					(float)(_color[idx+4].x),
+					(float)(_color[idx+5].x),
+					(float)(_color[idx+6].x),
+					(float)(_color[idx+7].x)};
+			ALIGNED float gAcc8[8] = {
+					(float)(_color[idx+0].y),
+					(float)(_color[idx+1].y),
+					(float)(_color[idx+2].y),
+					(float)(_color[idx+3].y),
+					(float)(_color[idx+4].y),
+					(float)(_color[idx+5].y),
+					(float)(_color[idx+6].y),
+					(float)(_color[idx+7].y)};
+			ALIGNED float bAcc8[8] = {
+					(float)(_color[idx+0].z),
+					(float)(_color[idx+1].z),
+					(float)(_color[idx+2].z),
+					(float)(_color[idx+3].z),
+					(float)(_color[idx+4].z),
+					(float)(_color[idx+5].z),
+					(float)(_color[idx+6].z),
+					(float)(_color[idx+7].z)};
+
+			// float dInc = length - length/pxz*h;
+			__m256 h8AVX = _mm256_mul_ps(_mm256_set1_ps(scaling),_mm256_load_ps(h8));
+			__m256 dInc = _mm256_sub_ps(length,_mm256_mul_ps(_mm256_mul_ps(length,reciprocal),h8AVX));
+			__m256 rInc = _mm256_mul_ps(_mm256_load_ps(rInc8),_mm256_set1_ps(COLOR_MULTIPLICATOR));
+			__m256 gInc = _mm256_mul_ps(_mm256_load_ps(gInc8),_mm256_set1_ps(COLOR_MULTIPLICATOR));
+			__m256 bInc = _mm256_mul_ps(_mm256_load_ps(bInc8),_mm256_set1_ps(COLOR_MULTIPLICATOR));
+
+			//-- Accumulated Data
+			__m256 wAcc = _mm256_load_ps(_weights+idx);
+			__m256 dAcc = _mm256_load_ps(_distance+idx);
+			__m256 rAcc = _mm256_load_ps(rAcc8);
+			__m256 gAcc = _mm256_load_ps(gAcc8);
+			__m256 bAcc = _mm256_load_ps(bAcc8);
+
+			// (pxz > 0.0f && imx>=0 && imy>=0 && imx<imageWidth && imy<imageHeight && isfinite(dInc))*4294967295
+			__m256 mask =
+					_mm256_and_ps(
+						_mm256_cmp_ps(pxz_AVX,_mm256_setzero_ps(),_CMP_GT_OS),
+						_mm256_and_ps(
+							_mm256_castsi256_ps(_mm256_and_si256(_mm256_cmpgt_epi32(_mm256_set1_epi32(imageHeight),imy),_mm256_cmpgt_epi32(imy,_mm256_set1_epi32(-1)))),
+							_mm256_and_ps(
+								_mm256_castsi256_ps(_mm256_and_si256(_mm256_cmpgt_epi32(_mm256_set1_epi32(imageWidth),imx),_mm256_cmpgt_epi32(imx,_mm256_set1_epi32(-1)))),
+								_mm256_cmp_ps(h8AVX,_mm256_set1_ps(maxcamdistance),_CMP_LT_OS))));
+
+
+			// (float)(dInc<DISTANCEWEIGHTEPSILON)
+			__m256 maskFront =
+					_mm256_and_ps(
+							_mm256_set1_ps(1.0f),
+							_mm256_cmp_ps(dInc,_mm256_set1_ps(DISTANCEWEIGHTEPSILON),_CMP_LT_OS));
+
+			// (float)(dInc>=DISTANCEWEIGHTEPSILON && dInc<thresholdWeight)
+			__m256 maskBack =
+					_mm256_and_ps(
+							_mm256_set1_ps(1.0f),
+							_mm256_and_ps(
+									_mm256_cmp_ps(dInc,_mm256_set1_ps(DISTANCEWEIGHTEPSILON),_CMP_GE_OS),
+									_mm256_cmp_ps(dInc,thresholdWeight,_CMP_LT_OS)));
+
+			// (thresholdWeight-dInc)/(thresholdWeight-DISTANCEWEIGHTEPSILON)
+			__m256 weightFall =
+					_mm256_mul_ps(
+							_mm256_sub_ps(thresholdWeight,dInc),
+							_mm256_rcp_ps(
+									_mm256_sub_ps(thresholdWeight,_mm256_set1_ps(DISTANCEWEIGHTEPSILON))));
+
+			__m256 wInc =
+					_mm256_and_ps(
+							_mm256_add_ps(maskFront,_mm256_mul_ps(weightFall,maskBack)),
+							mask);
+
+
+//			__m128 wNew = _mm_add_ps(wAcc,wInc);
+			__m256 wNew = _mm256_add_ps(wAcc,wInc);
+
+			// float factor = 1.0f/((float)(wPrev+wInc)+(float)(wPrev+wInc==0));
+			__m256 factor = _mm256_rcp_ps(
+					_mm256_add_ps(
+							wNew,
+							_mm256_and_ps(_mm256_set1_ps(1.0f),_mm256_cmp_ps(wNew,_mm256_setzero_ps(),_CMP_LE_OS))));
+
+			//_distance[idx] = (dPrev*wPrev +
+			//		std::max(-distanceThreshold*leafScale,std::min(distanceThreshold*leafScale,dInc))*wInc)*factor;
+			_mm256_store_ps(_distance+idx,
+					_mm256_mul_ps(
+							_mm256_add_ps(
+									_mm256_mul_ps(dAcc,wAcc),
+									_mm256_and_ps(mask,
+										_mm256_mul_ps(
+												_mm256_max_ps(
+														_mm256_mul_ps(_mm256_set1_ps(-1.0f),thresholdDistance),
+														_mm256_min_ps(thresholdDistance,dInc)),
+												wInc))),
+							factor));
+
+			// _weights[idx] = wPrev+wInc;
+			_mm256_store_ps(_weights+idx,wNew);
+
+			//New: Thresholding to prevent Overexposure-Artefacts
+			__m256 col_max = _mm256_set1_ps(255.0f*COLOR_MULTIPLICATOR);
+			_mm256_store_ps(rAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(rAcc,wAcc),_mm256_mul_ps(rInc,wInc)),factor),col_max));
+			_mm256_store_ps(gAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(gAcc,wAcc),_mm256_mul_ps(gInc,wInc)),factor),col_max));
+			_mm256_store_ps(bAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(bAcc,wAcc),_mm256_mul_ps(bInc,wInc)),factor),col_max));
+
+
+			_color[idx+0].x = rAcc8[0];
+			_color[idx+1].x = rAcc8[1];
+			_color[idx+2].x = rAcc8[2];
+			_color[idx+3].x = rAcc8[3];
+			_color[idx+4].x = rAcc8[4];
+			_color[idx+5].x = rAcc8[5];
+			_color[idx+6].x = rAcc8[6];
+			_color[idx+7].x = rAcc8[7];
+
+			_color[idx+0].y = gAcc8[0];
+			_color[idx+1].y = gAcc8[1];
+			_color[idx+2].y = gAcc8[2];
+			_color[idx+3].y = gAcc8[3];
+			_color[idx+4].y = gAcc8[4];
+			_color[idx+5].y = gAcc8[5];
+			_color[idx+6].y = gAcc8[6];
+			_color[idx+7].y = gAcc8[7];
+
+			_color[idx+0].z = bAcc8[0];
+			_color[idx+1].z = bAcc8[1];
+			_color[idx+2].z = bAcc8[2];
+			_color[idx+3].z = bAcc8[3];
+			_color[idx+4].z = bAcc8[4];
+			_color[idx+5].z = bAcc8[5];
+			_color[idx+6].z = bAcc8[6];
+			_color[idx+7].z = bAcc8[7];
+
+		}
+	}
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #endif
 
@@ -1708,7 +1983,8 @@ void updateWrapperInteger
 //					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 //					scale,distanceThreshold,brickIdx,o,leafScale,
 //					_distance,_weights,_color);
-
+			if (depthNoise == NULL) {
+				//-- No Depth Noise Data is available, use standard update routine
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
 			update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
@@ -1722,7 +1998,9 @@ void updateWrapperInteger
 					scale,distanceThreshold,brickIdx,o,leafScale,
 					_distance,_weights,_color);
 #endif
-
+			} else {
+				//-- Depth Noise Data is available, use modified update routine
+			}
 
 
 		}
