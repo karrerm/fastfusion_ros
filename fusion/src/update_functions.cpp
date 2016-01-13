@@ -1502,7 +1502,7 @@ typedef struct SDFUpdateParameterFloat_ {
 } SDFUpdateParameterFloat;
 
 typedef struct SDFUpdateParameterInteger_ {
-	const ushort *depth; const float *noiseImg;float scaling; float maxcamdistance;
+	const ushort *depth; const float *depthNoise;float scaling; float maxcamdistance;
 	const uchar *rgb;
 	int imageWidth; int imageHeight;
 	float m11; float m12; float m13; float m14;
@@ -1514,7 +1514,7 @@ typedef struct SDFUpdateParameterInteger_ {
 	float *_distance; weighttype *_weights; colortype3 *_color;
 	sidetype brickLength;
 	SDFUpdateParameterInteger_(
-			const ushort *depth, const float *noiseImg, float scaling, float maxcamdistance,
+			const ushort *depth, const float *depthNoise, float scaling, float maxcamdistance,
 			const uchar *rgb,
 			int imageWidth, int imageHeight,
 			float m11, float m12, float m13, float m14,
@@ -1639,6 +1639,7 @@ void updateWrapperInteger
 )
 {
 	const ushort *depth = param.depth;
+	const float *depthNoise = param.depthNoise;
 	float scaling = param.scaling;
 	float maxcamdistance = param.maxcamdistance;
 	const uchar *rgb = param.rgb;
