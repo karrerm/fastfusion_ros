@@ -540,7 +540,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		//-- Lock visualization Mutex
 		boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
-		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
+		_fusion->addMap(depthImg, noiseImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
 		_fusion->updateMeshes();
 		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
 		if(_pointermeshes[0]) delete _pointermeshes[0];
