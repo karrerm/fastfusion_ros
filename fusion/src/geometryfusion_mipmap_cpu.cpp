@@ -1719,7 +1719,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	boost::thread *distanceUpdateThread = NULL;
 	if(_threaded){
 	distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
-			(const ushort*)depthData, scaling, maxcamdistance, (const uchar*)rgb.data,
+			(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -1802,7 +1802,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	else{
 //		fprintf(stderr, "U");
 		updateWrapperInteger(SDFUpdateParameterInteger(
-				(const ushort*)depthData, scaling, maxcamdistance, (const uchar*)rgb.data,
+				(const ushort*)depthData, (const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -2135,8 +2135,9 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	boost::thread *distanceUpdateThread = NULL;
 
 	if(_threaded){
-	distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
-			(const ushort*)depthdata, scaling, maxcamdistance, (const uchar*)rgb.data,
+		//-- Add Null pointer in SDFUpdateParameterInteger to where the depth noise data would be
+		distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+			(const ushort*)depthdata, NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -2241,7 +2242,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	else{
 //		fprintf(stderr, "U");
 		updateWrapperInteger(SDFUpdateParameterInteger(
-				(const ushort*)depthdata, scaling, maxcamdistance, (const uchar*)rgb.data,
+				(const ushort*)depthdata,  NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
