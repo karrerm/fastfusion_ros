@@ -16,6 +16,7 @@
 		<!--remap from="image_rgb"			to="$(arg slam_name)/color/image_raw" -->
 		<remap from="image_depth"		to="$(arg slam_name)/depth/image_raw" />
 		<remap from="image_conf"		to="$(arg slam_name)/confidence/image_raw" />
+		<remap from="image_noise" 		to="$(arg slam_name)/noise/image_raw" />
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
 	<rosparam file="$(find fastfusion_node)/cfg/camchain_pico.yaml"/>
