@@ -223,6 +223,10 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
 //-- The depth image is undistorted according to the intrinsics of the depth camera.
 //--
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
 	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf, imgNoiseDist, imgNoise;
 	ros::Time timeMeas;
 	//-- Convert the incomming messages
@@ -247,10 +251,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	// Create Dummy RGB Frame
 	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
 
-	//-- Get time stamp of the incoming images
-	ros::Time timestamp = msgDepth->header.stamp;
-	broadcastTFchain(timestamp);
-	previous_ts_ = timestamp;
+
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -314,7 +315,8 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
 }
 
 
@@ -500,11 +502,12 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
+		std::cout << "Broadcast Transform" << std::endl;
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
 	} else {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
-	tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
+	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
 	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "imu", "cam0"));
 
 }

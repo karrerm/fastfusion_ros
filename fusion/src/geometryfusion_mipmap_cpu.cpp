@@ -1947,6 +1947,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 		float scaling, float maxcamdistance)
 {
+	std::cout << "In correct add Map" << std::endl;
 	//fprintf(stderr,"\nI[%i]",_framesAdded);
 	//Parameter Helpers
 	cv::Mat rot = caminfo.getRotation();

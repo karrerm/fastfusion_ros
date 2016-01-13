@@ -1801,7 +1801,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			volumetype *_leafNumber, sidetype3 *_leafPos, sidetype *_leafScale,
 			float *_distance, weighttype *_weights, colortype3 *_color,
 			sidetype brickLength):
-			depth(depth), scaling(scaling), maxcamdistance(maxcamdistance), rgb(rgb),
+			depth(depth), depthNoise(depthNoise),scaling(scaling), maxcamdistance(maxcamdistance), rgb(rgb),
 			imageWidth(imageWidth), imageHeight(imageHeight),
 			m11(m11), m12(m12), m13(m13), m14(m14),
 			m21(m21), m22(m22), m23(m23), m24(m24),
