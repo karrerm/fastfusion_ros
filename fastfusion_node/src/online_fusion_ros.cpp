@@ -528,4 +528,65 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 
 
 
-
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose) {
+//-- Update Fusion function when using it with noise data (from ToF camera)
+	if (!_threadFusion) {
+		//-- Unthreaded Fusion
+		_fusionActive = true;
+		_frameCounter++;
+		_isReady = false;
+		_currentPose = pose;
+		depthImg.copyTo(_currentDepthImg);
+		//-- Lock visualization Mutex
+		boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
+		//-- Add and update Map
+		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
+		_fusion->updateMeshes();
+		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
+		if(_pointermeshes[0]) delete _pointermeshes[0];
+		if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
+		if(!_currentMeshInterleaved) {
+			std::cout << "Create New Mesh Interleaved" << std::endl;;
+			_currentMeshInterleaved = new MeshInterleaved(3);
+		}
+		//-- Generate new Mesh
+		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+		updateLockVis.unlock();
+		//-- Check whether to update Visualization
+		if (_frameCounter > 3) {
+			_update = true;
+			_frameCounter = 0;
+		}
+		_isReady = true;
+		_fusionActive = false;
+	} else {
+		//-- The fusion process is threaded
+		if(!_fusionThread){
+			//-- If not yet initialize --> initialize fusion thread
+			_fusionThread = new boost::thread(&OnlineFusionROS::fusionWrapperROS, this);
+			_runFusion = true;
+		}
+		_currentPose = pose;
+		//-- Lock and update data-queue
+		boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
+		_queueRGB.push(rgbImg);
+		_queueDepth.push(depthImg);
+		_queuePose.push(pose);
+		updateLock.unlock();
+		_frameCounter++;
+		//--Update Mesh
+		if(_newMesh){
+			_newMesh = false;
+			boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
+			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
+			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
+			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
+			updateLockVis.unlock();
+		}
+		//-- Check whether to update Visualization
+		if (_frameCounter > 3) {
+			_update = true;
+		}
+	}
+}

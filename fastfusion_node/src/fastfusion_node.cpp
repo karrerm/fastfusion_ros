@@ -314,7 +314,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
 }
 
 

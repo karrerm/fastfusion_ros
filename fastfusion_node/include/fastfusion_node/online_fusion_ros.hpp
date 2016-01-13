@@ -105,7 +105,11 @@ public:
 	bool _saveScreenshot;
 
 	bool _threadImageReading;
+//-- Update Fusion
+	// No Noise Data available
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
+	// With Noise Data
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose);
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
