@@ -223,14 +223,16 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
 //-- The depth image is undistorted according to the intrinsics of the depth camera.
 //--
-	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf;
+	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf, imgNoiseDist, imgNoise;
 	ros::Time timeMeas;
 	//-- Convert the incomming messages
 	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
 	getConfImageFromRosMsg(msgConf, &imgConfDist);
+	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
 	//-- Undistort the depth image
 	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
 	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
+	cv::undistort(imgNoiseDist, imgNoise, intrinsic_, distCoeff_);
 
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
 	depthImageCorrection(imgDepthDist, &imgDepthCorr);
@@ -489,6 +491,11 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 	//depthImg2.convertTo(*depthImg,CV_16UC1);
 	//*depthImg = *depthImg*5000;
 
+}
+
+void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgNoise, cv::Mat *noiseImg) {
+//-- Function to convert ROS-image (noise) message to OpenCV-Mat.
+	*noiseImg = cv_bridge::toCvCopy(msgNoise, sensor_msgs::image_encodings::TYPE_32FC1)->image;
 }
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {

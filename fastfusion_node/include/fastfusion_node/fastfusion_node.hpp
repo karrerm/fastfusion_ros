@@ -42,6 +42,7 @@ protected:
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
 	void getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *dephtImg);
+	void getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgNoise, cv::Mat *noiseImg);
 	void registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg);
 	void depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected);
 
