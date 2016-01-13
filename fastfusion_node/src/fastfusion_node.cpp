@@ -181,11 +181,14 @@ void FastFusionWrapper::run() {
 		//-- Subscribe to depth image callback
 		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberConfidence_ = new message_filters::Subscriber<sensor_msgs::Image>;
+		subscriberNoise_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),5);
 		subscriberConfidence_->subscribe(node_,node_.resolveName("image_conf"),5);
-		sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
-			(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),*subscriberDepth_,*subscriberConfidence_);
-		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2));
+		subscriberNoise_->subscribe(node_,node_.resolveName("image_noise"),5);
+		sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> >
+			(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image>(5),
+					*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_);
+		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));
 	} else {
 		//-- Synchronize the image messages received from Realsense Sensor
 		/*
@@ -212,7 +215,8 @@ void FastFusionWrapper::run() {
 
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
-										  const sensor_msgs::ImageConstPtr& msgConf) {
+										  const sensor_msgs::ImageConstPtr& msgConf,
+										  const sensor_msgs::ImageConstPtr& msgNoise) {
 	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
 		return;
 	}

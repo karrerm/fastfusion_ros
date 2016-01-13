@@ -36,7 +36,8 @@ public:
 protected:
 	//-- Image Message Callback
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
-	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msg_depth, const sensor_msgs::ImageConstPtr& msgConf);
+	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
+			const sensor_msgs::ImageConstPtr& msgNoise);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
@@ -56,10 +57,13 @@ protected:
 	double imageScale_;
 
 	OnlineFusionROS onlinefusion_;
-	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
+	//-- Subscribers
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
-	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> > *sync_;
+	message_filters::Subscriber<sensor_msgs::Image> *subscriberNoise_;
+	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,
+			sensor_msgs::Image> > *sync_;
 
 	void broadcastTFchain(ros::Time timestamp);
 	tf::TransformBroadcaster tfBroadcaster_;
