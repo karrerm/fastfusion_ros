@@ -324,8 +324,8 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
-	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
+	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
 }
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
@@ -430,8 +430,6 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	if ((pcl_msg.header.stamp - previous_ts_).toSec() <= 0.05){
 			return;
 	}
-	std::cout << "in registerPointCloudCallback" << std::endl;
-	std::cout << "size of unsigned short = " << sizeof(unsigned short) << std::endl;
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	//-- Create RGB and Depth image from point cloud
@@ -572,7 +570,6 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		std::cout << "Broadcast Transform" << std::endl;
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
 	} else {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
