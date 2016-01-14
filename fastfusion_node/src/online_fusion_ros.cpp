@@ -56,7 +56,7 @@ _currentMeshInterleaved(NULL),
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
 	//-- Create Visualization Thread
-	_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
+	//_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
 }
 
 OnlineFusionROS::~OnlineFusionROS()
@@ -135,7 +135,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 //-- Fusion-Wrapper member to enable threading the fusion process. To buffer the data needed for the fusion
 //-- (rgb-Image,depth-image, camera-pose), a std::queue with Mutex locking is used.
 	//-- Initialize datatypes to store the current values
-	cv::Mat currImgRGB, currImgDepth;
+	cv::Mat currImgRGB, currImgDepth, currNoise;
 	CameraInfo currPose;
 	unsigned int framesProcessed = 0;
 	//-- Perform thread, as long as fusion is active
@@ -143,20 +143,38 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 		//-- Check if there is data available in the queue
 		if ((_queueRGB.size() >=1) && (_queueDepth.size() >= 1) && (_queuePose.size() >=1) ) {
 			framesProcessed++;
-			//-- Data is available --> Perform fusion
-			// Lock Mutex to extract data
 			boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
-			currImgRGB = _queueRGB.front();
-			_queueRGB.pop();
-			currImgDepth = _queueDepth.front();
-			_queueDepth.pop();
-			currPose = _queuePose.front();
-			_queuePose.pop();
-			// Unlock Mutex
-			updateLock.unlock();
-			//-- Add Map and perform update
-			_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
-			_newMesh = _fusion->updateMeshes();
+			if (_queueNoise.size() >= 1) {
+			//-- Depth-Noise Data is available
+				currImgRGB = _queueRGB.front();
+				_queueRGB.pop();
+				currImgDepth = _queueDepth.front();
+				_queueDepth.pop();
+				currPose = _queuePose.front();
+				_queuePose.pop();
+				currNoise = _queueNoise.front();
+				_queueNoise.pop();
+				// Unlock Mutex
+				updateLock.unlock();
+				//-- Add Map and perform update
+				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
+				_newMesh = _fusion->updateMeshes();
+			} else {
+			//-- No Depth Noise Data is available
+				currImgRGB = _queueRGB.front();
+				_queueRGB.pop();
+				currImgDepth = _queueDepth.front();
+				_queueDepth.pop();
+				currPose = _queuePose.front();
+				_queuePose.pop();
+				// Unlock Mutex
+				updateLock.unlock();
+				//-- Add Map and perform update
+				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
+				_newMesh = _fusion->updateMeshes();
+			}
+
+
 		}
 	}
 	_fusionActive = false;
@@ -532,6 +550,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 //-- Update Fusion function when using it with noise data (from ToF camera)
 	if (!_threadFusion) {
 		//-- Unthreaded Fusion
+		std::cout << "Fusion is not threaded" << std::endl;
 		_fusionActive = true;
 		_frameCounter++;
 		_isReady = false;
@@ -572,6 +591,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		_queueRGB.push(rgbImg);
 		_queueDepth.push(depthImg);
 		_queuePose.push(pose);
+		_queueNoise.push(noiseImg);
 		updateLock.unlock();
 		_frameCounter++;
 		//--Update Mesh

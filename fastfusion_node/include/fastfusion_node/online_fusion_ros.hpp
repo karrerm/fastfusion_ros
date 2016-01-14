@@ -149,6 +149,7 @@ protected :
 	boost::mutex _fusionUpdateMutex;
 	std::queue<cv::Mat> _queueRGB;
 	std::queue<cv::Mat> _queueDepth;
+	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
 	void fusionWrapperROS(void);
 	bool _isReady;
