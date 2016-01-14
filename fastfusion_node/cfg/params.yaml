@@ -19,10 +19,11 @@ depthConsistencyChecks : 10
 
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
-fileLocation : /home/karrer/Boiler1
+fileLocation : /home/karrer/newDeskRovio_run5
 # TF Id's
 world_id : /world
 cam_id : /depth
 
 # Define if using Time of flight sensor or not
 use_pmd : true
+depth_noise: false
