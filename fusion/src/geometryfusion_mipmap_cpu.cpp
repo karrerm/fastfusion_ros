@@ -1802,7 +1802,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	else{
 //		fprintf(stderr, "U");
 		updateWrapperInteger(SDFUpdateParameterInteger(
-				(const ushort*)depthData, (const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
+				(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -1947,7 +1947,6 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 		float scaling, float maxcamdistance)
 {
-	std::cout << "In correct add Map" << std::endl;
 	//fprintf(stderr,"\nI[%i]",_framesAdded);
 	//Parameter Helpers
 	cv::Mat rot = caminfo.getRotation();
@@ -3306,7 +3305,6 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 
 //	*mesh = *((*meshCells)[11585].meshinterleaved);
 	double timeAfter = (double)cv::getTickCount();
-	std::cout << "Used Time for meshing = " << timeMiddle-timeBefore << ", mesh size = " << _currentPointCloud->size() << std::endl;
 	double timeUpdate = timeMiddle-timeBefore;
 	double timeSum = timeAfter-timeMiddle;
 
