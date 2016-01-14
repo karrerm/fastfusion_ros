@@ -38,6 +38,7 @@ protected:
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
 			const sensor_msgs::ImageConstPtr& msgNoise);
+	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
@@ -64,8 +65,8 @@ protected:
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberNoise_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,
-			sensor_msgs::Image> > *sync_;
-
+			sensor_msgs::Image> > *syncNoise_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image,sensor_msgs::Image> > *sync_;
 	void broadcastTFchain(ros::Time timestamp);
 	tf::TransformBroadcaster tfBroadcaster_;
 	tf::Transform tf_cam0_imu;
@@ -77,7 +78,7 @@ protected:
 	std::string world_id_;
 	std::string cam_id_;
 
-	bool use_pmd_;
+	bool use_pmd_, depth_noise_;
 	bool testing_point_cloud_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrameTrans_;
