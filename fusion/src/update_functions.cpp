@@ -1465,7 +1465,6 @@ void update8AddLoopAVXSingleInteger
 {
 //-- Update Function which uses the available depth noise information for the SDF update.
 
-
 	volumetype threadOffset = brickIdx*512;
 	float fleafScale = (float)(leafScale)*scale;
 	float ox = (m11*o.x+m12*o.y+m13*o.z)*scale + m14;
@@ -1625,6 +1624,15 @@ void update8AddLoopAVXSingleInteger
 								_mm256_castsi256_ps(_mm256_and_si256(_mm256_cmpgt_epi32(_mm256_set1_epi32(imageWidth),imx),_mm256_cmpgt_epi32(imx,_mm256_set1_epi32(-1)))),
 								_mm256_cmp_ps(h8AVX,_mm256_set1_ps(maxcamdistance),_CMP_LT_OS))));
 
+			//-- Set zero noise values to large value in order to obtain small weight for it afterwards (reciprocal)
+			// noise8 > 0
+			__m256 noiseMask =
+					_mm256_cmp_ps(_mm256_load_ps(noise8), _mm256_setzero_ps(), _CMP_EQ_OS);
+
+			__m256 noise8wo0 =
+					_mm256_add_ps(
+							_mm256_mul_ps(_mm256_set1_ps(100.0f),noiseMask),
+									_mm256_load_ps(noise8));
 
 			// (float)(dInc<DISTANCEWEIGHTEPSILON)
 			__m256 maskFront =
@@ -1648,11 +1656,14 @@ void update8AddLoopAVXSingleInteger
 									_mm256_sub_ps(thresholdWeight,_mm256_set1_ps(DISTANCEWEIGHTEPSILON))));
 
 			//-- Insert Addaptive Weighting here
-			__m256 wInc =
+			__m256 wInc1 =
 					_mm256_and_ps(
 							_mm256_add_ps(maskFront,_mm256_mul_ps(weightFall,maskBack)),
 							mask);
 
+			__m256 wInc =
+					_mm256_mul_ps(
+							wInc1, _mm256_rcp_ps(noise8wo0));
 
 //			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
@@ -1984,24 +1995,38 @@ void updateWrapperInteger
 //					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 //					scale,distanceThreshold,brickIdx,o,leafScale,
 //					_distance,_weights,_color);
-			if (depthNoise == NULL) {
-				//-- No Depth Noise Data is available, use standard update routine
+
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
-			update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-					scale,distanceThreshold,brickIdx,o,leafScale,
-					_distance,_weights,_color);
+		    if (depthNoise) {
+		    	//-- Depth Noise Data is available, use routine with adaptive weighting
+		    	update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+						scale,distanceThreshold,brickIdx,o,leafScale,
+						_distance,_weights,_color);
+		    } else {
+		    	//-- No Depth Noise Data is available, use standard update routine
+		    	update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+						scale,distanceThreshold,brickIdx,o,leafScale,
+						_distance,_weights,_color);
+		    }
 #else
 #pragma message "Compiling without AVX2 support"
-			update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-					scale,distanceThreshold,brickIdx,o,leafScale,
-					_distance,_weights,_color);
+		    if (depthNoise) {
+		    	//-- Depth Noise Data is available, use routine with adaptive weighting
+		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+						scale,distanceThreshold,brickIdx,o,leafScale,
+						_distance,_weights,_color);
+		    } else {
+		    	//-- No Depth Noise Data is available, use standard update routine
+		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+						scale,distanceThreshold,brickIdx,o,leafScale,
+						_distance,_weights,_color);
+		    }
 #endif
-			} else {
-				//-- Depth Noise Data is available, use modified update routine
-			}
 
 
 		}
