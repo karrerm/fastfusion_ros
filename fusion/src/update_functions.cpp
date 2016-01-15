@@ -1600,6 +1600,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+6].z),
 					(float)(_color[idx+7].z)};
 
+
 			// float dInc = length - length/pxz*h;
 			__m256 h8AVX = _mm256_mul_ps(_mm256_set1_ps(scaling),_mm256_load_ps(h8));
 			__m256 dInc = _mm256_sub_ps(length,_mm256_mul_ps(_mm256_mul_ps(length,reciprocal),h8AVX));
@@ -1625,14 +1626,16 @@ void update8AddLoopAVXSingleInteger
 								_mm256_cmp_ps(h8AVX,_mm256_set1_ps(maxcamdistance),_CMP_LT_OS))));
 
 			//-- Set zero noise values to large value in order to obtain small weight for it afterwards (reciprocal)
-			// noise8 > 0
+			// noise8 == 0
 			__m256 noiseMask =
-					_mm256_cmp_ps(_mm256_load_ps(noise8), _mm256_setzero_ps(), _CMP_EQ_OS);
-
+					_mm256_and_ps(_mm256_set1_ps(1.0f),
+							_mm256_cmp_ps(_mm256_load_ps(noise8), _mm256_setzero_ps(), _CMP_EQ_OS));
+			// if(noise[i]==0) noise[i] = 100.0f, else noise[i] = noise[i]
 			__m256 noise8wo0 =
 					_mm256_add_ps(
-							_mm256_mul_ps(_mm256_set1_ps(100.0f),noiseMask),
+							_mm256_mul_ps(_mm256_set1_ps(100000.0f), noiseMask),
 									_mm256_load_ps(noise8));
+
 
 			// (float)(dInc<DISTANCEWEIGHTEPSILON)
 			__m256 maskFront =
@@ -1655,6 +1658,7 @@ void update8AddLoopAVXSingleInteger
 							_mm256_rcp_ps(
 									_mm256_sub_ps(thresholdWeight,_mm256_set1_ps(DISTANCEWEIGHTEPSILON))));
 
+
 			//-- Insert Addaptive Weighting here
 			__m256 wInc1 =
 					_mm256_and_ps(
@@ -1663,7 +1667,8 @@ void update8AddLoopAVXSingleInteger
 
 			__m256 wInc =
 					_mm256_mul_ps(
-							wInc1, _mm256_rcp_ps(noise8wo0));
+							_mm256_mul_ps(
+									wInc1, _mm256_rcp_ps(noise8wo0)), _mm256_set1_ps(0.002f));
 
 //			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
