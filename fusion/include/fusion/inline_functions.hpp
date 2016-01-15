@@ -123,6 +123,14 @@ inline weighttype getDistanceWeight_AoS_variables_h
 #endif
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 14.01.2015
+inline sidetype leafScaleFuncNoise(const float &noise, const sidetype &referenceBrickLength) {
+//-- Function to adapt the brick scale based on the noise level from the sensor
+	float factor = std::max(noise/REFERENCE_NOISE,1.0f);
+	return (sidetype)floor(factor*referenceBrickLength);
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline sidetype leafScaleFunc(const float &depth, const sidetype &referenceBrickLength)
