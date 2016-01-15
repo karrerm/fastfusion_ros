@@ -1759,7 +1759,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 #else
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
-			depthData,scaling,maxcamdistance,
+			depthData, noiseData,scaling,maxcamdistance,
 			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
 			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber,_leafParent,
 			_newBudsSinceMeshingToQueue.subtreeBuds->data(),
@@ -2186,7 +2186,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 #else
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
-			depthdata,scaling,maxcamdistance,
+			depthdata,NULL,scaling,maxcamdistance,
 			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
 			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber,_leafParent,
 			_newBudsSinceMeshingToQueue.subtreeBuds->data(),

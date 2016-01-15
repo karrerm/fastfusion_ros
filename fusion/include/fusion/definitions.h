@@ -201,12 +201,15 @@ typedef struct int3_ { int x; int y; int z;} int3;
 
 #define MAXCAMDISTANCE 4.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 0.5
+#define MIN_WEIGHT_FOR_SURFACE 1.0
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
 #define FRUSTUM_FAR 1.0
 
+
+#define USE_NOISE_FOR_SCALE 	// Using the depth noise for brick scale
+#define REFERENCE_NOISE 0.025f
 #define REFERENCE_DEPTH 1.0f
 //#define SCALE_VARIANCE
 //#define SCALE_DEVIATION
@@ -231,7 +234,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 1.0f
 
-#define BANDWIDTHFACTOR 1.0
+#define BANDWIDTHFACTOR 10.0
 #define BRICKLENGTH 8
 
 
@@ -249,7 +252,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define WEIGHT_GAUSS
 //#define WEIGHT_GAUSS_NARROW
 //#define DISTANCEWEIGHTSIGMA 0.05f // this is default
-#define DISTANCEWEIGHTSIGMA 0.05f
+#define DISTANCEWEIGHTSIGMA 0.02f
 
 #define DISTANCEWEIGHTEPSILON 0.005f
 //#define DISTANCEMINEXPWEIGHT  0.000001f // this is default
