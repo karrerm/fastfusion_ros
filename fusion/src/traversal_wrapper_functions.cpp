@@ -677,6 +677,7 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 
 					if(vx[k]>=0 && (sidetype)vx[k]<_n && vy[k]>=0 && (sidetype)vy[k]<_n && vz[k]>=0 && (sidetype)vz[k]<_n){
 #ifndef USE_NOISE_FOR_SCALE
+						//-- Use depth as indicator for the scale
 						queryPointDepthSingle_func_subtree(vx[k],vy[k],vz[k],leafScaleFunc((float)(pz[k])*scaling,_brickLength),
 								_n,_brickLength,_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueued,
 								_leafNumber,_leafPos,_leafScale,_queueIndexOfLeaf,_leafParent,
@@ -684,6 +685,7 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 								_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,
 								_treeSizeSinceMeshing);
 #else
+						//-- Use noise as indicator for the scale
 						queryPointDepthSingle_func_subtree(vx[k],vy[k],vz[k],leafScaleFuncNoise(noise[k],_brickLength),
 								_n,_brickLength,_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueued,
 								_leafNumber,_leafPos,_leafScale,_queueIndexOfLeaf,_leafParent,
