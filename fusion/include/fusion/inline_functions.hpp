@@ -111,7 +111,7 @@ inline weighttype getDistanceWeight_AoS_variables_h
 #ifdef WEIGHT_GAUSS
 				float cutoff = expf(-distanceWeightSigma*(threshold-distanceWeightEpsilon)*(threshold-distanceWeightEpsilon));
 				return (float)(distance<distanceWeightEpsilon) +
-						max((expf(-distanceWeightSigma*(distance-distanceWeightEpsilon)*(distance-distanceWeightEpsilon))-cutoff)/(1.0f-cutoff),DISTANCEMINEXPWEIGHT)
+						std::max((expf(-distanceWeightSigma*(distance-distanceWeightEpsilon)*(distance-distanceWeightEpsilon))-cutoff)/(1.0f-cutoff),DISTANCEMINEXPWEIGHT)
 						*(float)(distance>=distanceWeightEpsilon && distance<threshold);
 #endif
 #ifdef WEIGHT_GAUSS_NARROW
