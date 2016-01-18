@@ -201,15 +201,19 @@ typedef struct int3_ { int x; int y; int z;} int3;
 
 #define MAXCAMDISTANCE 4.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 1.0
+#define MIN_WEIGHT_FOR_SURFACE 8.0
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
 #define FRUSTUM_FAR 1.0
 
 
-#define USE_NOISE_FOR_SCALE 	// Using the depth noise for brick scale
-#define REFERENCE_NOISE 0.025f
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 15.1.2016
+//#define USE_NOISE_FOR_SCALE 	// Using the depth noise for brick scale
+#define REFERENCE_NOISE 0.025f	// Reference Value for the brick scale using the noise values
+#define MIN_NOISE_LEVEL 0.005f	// Minimal expected noise (used to scale noise dependent weighting)
+///////////////////////////////////////////////////////////////////////////////////////////////////
 #define REFERENCE_DEPTH 1.0f
 //#define SCALE_VARIANCE
 //#define SCALE_DEVIATION

@@ -1629,11 +1629,11 @@ void update8AddLoopAVXSingleInteger
 			// noise8 == 0
 			__m256 noiseMask =
 					_mm256_and_ps(_mm256_set1_ps(1.0f),
-							_mm256_cmp_ps(_mm256_load_ps(noise8), _mm256_setzero_ps(), _CMP_EQ_OS));
+							_mm256_cmp_ps(_mm256_load_ps(noise8), _mm256_set1_ps(0.0f), _CMP_EQ_OS));
 			// if(noise[i]==0) noise[i] = 100.0f, else noise[i] = noise[i]
 			__m256 noise8wo0 =
 					_mm256_add_ps(
-							_mm256_mul_ps(_mm256_set1_ps(100000.0f), noiseMask),
+							_mm256_mul_ps(_mm256_set1_ps(1000.0f), noiseMask),
 									_mm256_load_ps(noise8));
 
 
@@ -1668,7 +1668,7 @@ void update8AddLoopAVXSingleInteger
 			__m256 wInc =
 					_mm256_mul_ps(
 							_mm256_mul_ps(
-									wInc1, _mm256_rcp_ps(noise8wo0)), _mm256_set1_ps(0.002f));
+									wInc1, _mm256_rcp_ps(noise8wo0)), _mm256_set1_ps(MIN_NOISE_LEVEL));
 
 //			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
