@@ -213,7 +213,7 @@ void FastFusionWrapper::run() {
 	}
 
 	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/camera/depth/points", 5, &FastFusionWrapper::registerPointCloudCallback,this);
-	ros::Duration(5).sleep();
+	ros::Duration(0.1).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
@@ -246,13 +246,16 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
 	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
 	cv::undistort(imgNoiseDist, imgNoise, intrinsic_, distCoeff_);
-
+	cv::Mat bin = imgConf == 255;
+	cv::Mat mask;
+	imgConf.copyTo(mask,bin);
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
 	depthImageCorrection(imgDepthDist, &imgDepthCorr);
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
-			if (imgConf.at<unsigned char>(v,u)!= 255) {
+			if (mask.at<unsigned char>(v,u)!= 255) {
 				imgDepthCorr.at<unsigned short>(v,u) = 65000;
+				imgNoise.at<float>(v,u) = 0.0f;
 			}
 		}
 	}
@@ -360,7 +363,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	}
 	//imgDepth = imgDepthDist;
 	// Create Dummy RGB Frame
-	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
+	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(255,0,0));
 
 
 	//-- Get Pose (tf-listener)
@@ -570,11 +573,11 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
 	} else {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
-	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
+	tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
 	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "imu", "cam0"));
 
 }
