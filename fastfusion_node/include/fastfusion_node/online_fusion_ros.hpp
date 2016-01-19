@@ -105,7 +105,11 @@ public:
 	bool _saveScreenshot;
 
 	bool _threadImageReading;
+//-- Update Fusion
+	// No Noise Data available
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
+	// With Noise Data
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose);
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
@@ -145,6 +149,7 @@ protected :
 	boost::mutex _fusionUpdateMutex;
 	std::queue<cv::Mat> _queueRGB;
 	std::queue<cv::Mat> _queueDepth;
+	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
 	void fusionWrapperROS(void);
 	bool _isReady;

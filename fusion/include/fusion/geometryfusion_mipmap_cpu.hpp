@@ -124,6 +124,9 @@ public:
 			std::vector<cv::Mat> rgb = std::vector<cv::Mat>(3));
 	int addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 			float scaling, float maxcamdistance);
+	//-- Adding single image with depth noise information
+	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
+			const cv::Mat &rgb, float scaling, float maxcamdistance);
 	//Adding multiple images up to the next keyframe
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<std::vector<cv::Mat> > rgbImages = std::vector<std::vector<cv::Mat> >(),
@@ -407,7 +410,8 @@ protected:
 			const sidetype &_brickLength,
 			const int &_imageWidth, const int &_imageHeight,
 			int3 &_boxMin, int3 &_boxMax,
-			const ushort *data, float scaling, float maxcamdistance,
+			const ushort *data, const float *noiseData,
+			float scaling, float maxcamdistance,
 			volumetype *_tree,
 			volumetype &_nBranchesUsed,
 			const volumetype &_nLeavesTotal, volumetype &_nLeavesUsed, volumetype &_nLeavesQueued,

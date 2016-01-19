@@ -135,7 +135,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 //-- Fusion-Wrapper member to enable threading the fusion process. To buffer the data needed for the fusion
 //-- (rgb-Image,depth-image, camera-pose), a std::queue with Mutex locking is used.
 	//-- Initialize datatypes to store the current values
-	cv::Mat currImgRGB, currImgDepth;
+	cv::Mat currImgRGB, currImgDepth, currNoise;
 	CameraInfo currPose;
 	unsigned int framesProcessed = 0;
 	//-- Perform thread, as long as fusion is active
@@ -143,20 +143,38 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 		//-- Check if there is data available in the queue
 		if ((_queueRGB.size() >=1) && (_queueDepth.size() >= 1) && (_queuePose.size() >=1) ) {
 			framesProcessed++;
-			//-- Data is available --> Perform fusion
-			// Lock Mutex to extract data
 			boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
-			currImgRGB = _queueRGB.front();
-			_queueRGB.pop();
-			currImgDepth = _queueDepth.front();
-			_queueDepth.pop();
-			currPose = _queuePose.front();
-			_queuePose.pop();
-			// Unlock Mutex
-			updateLock.unlock();
-			//-- Add Map and perform update
-			_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
-			_newMesh = _fusion->updateMeshes();
+			if (_queueNoise.size() >= 1) {
+			//-- Depth-Noise Data is available
+				currImgRGB = _queueRGB.front();
+				_queueRGB.pop();
+				currImgDepth = _queueDepth.front();
+				_queueDepth.pop();
+				currPose = _queuePose.front();
+				_queuePose.pop();
+				currNoise = _queueNoise.front();
+				_queueNoise.pop();
+				// Unlock Mutex
+				updateLock.unlock();
+				//-- Add Map and perform update
+				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
+				_newMesh = _fusion->updateMeshes();
+			} else {
+			//-- No Depth Noise Data is available
+				currImgRGB = _queueRGB.front();
+				_queueRGB.pop();
+				currImgDepth = _queueDepth.front();
+				_queueDepth.pop();
+				currPose = _queuePose.front();
+				_queuePose.pop();
+				// Unlock Mutex
+				updateLock.unlock();
+				//-- Add Map and perform update
+				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
+				_newMesh = _fusion->updateMeshes();
+			}
+
+
 		}
 	}
 	_fusionActive = false;
@@ -528,4 +546,67 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 
 
 
-
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose) {
+//-- Update Fusion function when using it with noise data (from ToF camera)
+	if (!_threadFusion) {
+		//-- Unthreaded Fusion
+		std::cout << "Fusion is not threaded" << std::endl;
+		_fusionActive = true;
+		_frameCounter++;
+		_isReady = false;
+		_currentPose = pose;
+		depthImg.copyTo(_currentDepthImg);
+		//-- Lock visualization Mutex
+		boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
+		//-- Add and update Map
+		_fusion->addMap(depthImg, noiseImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
+		_fusion->updateMeshes();
+		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
+		if(_pointermeshes[0]) delete _pointermeshes[0];
+		if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
+		if(!_currentMeshInterleaved) {
+			std::cout << "Create New Mesh Interleaved" << std::endl;;
+			_currentMeshInterleaved = new MeshInterleaved(3);
+		}
+		//-- Generate new Mesh
+		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+		updateLockVis.unlock();
+		//-- Check whether to update Visualization
+		if (_frameCounter > 3) {
+			_update = true;
+			_frameCounter = 0;
+		}
+		_isReady = true;
+		_fusionActive = false;
+	} else {
+		//-- The fusion process is threaded
+		if(!_fusionThread){
+			//-- If not yet initialize --> initialize fusion thread
+			_fusionThread = new boost::thread(&OnlineFusionROS::fusionWrapperROS, this);
+			_runFusion = true;
+		}
+		_currentPose = pose;
+		//-- Lock and update data-queue
+		boost::mutex::scoped_lock updateLock(_fusionUpdateMutex);
+		_queueRGB.push(rgbImg);
+		_queueDepth.push(depthImg);
+		_queuePose.push(pose);
+		_queueNoise.push(noiseImg);
+		updateLock.unlock();
+		_frameCounter++;
+		//--Update Mesh
+		if(_newMesh){
+			_newMesh = false;
+			boost::mutex::scoped_lock updateLockVis(_visualizationUpdateMutex);
+			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
+			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
+			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
+			updateLockVis.unlock();
+		}
+		//-- Check whether to update Visualization
+		if (_frameCounter > 3) {
+			_update = true;
+		}
+	}
+}

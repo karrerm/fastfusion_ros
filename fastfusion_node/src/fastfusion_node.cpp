@@ -34,6 +34,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);					// Frame id of origin
 	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);						// Frame id of depth camera
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);						// Use ToF of RGBD
+	loadSuccess &= nodeLocal_.getParam("depth_noise",depth_noise_);				// Depth noise data is available
 	std::cout << "Parameters: " << loadSuccess << std::endl;
 	//-- Read Camera to IMU transformation
 	XmlRpc::XmlRpcValue T_cam0_imu;
@@ -181,11 +182,21 @@ void FastFusionWrapper::run() {
 		//-- Subscribe to depth image callback
 		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberConfidence_ = new message_filters::Subscriber<sensor_msgs::Image>;
+		subscriberNoise_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),5);
 		subscriberConfidence_->subscribe(node_,node_.resolveName("image_conf"),5);
-		sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
-			(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),*subscriberDepth_,*subscriberConfidence_);
-		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2));
+		if (depth_noise_) {
+			subscriberNoise_->subscribe(node_,node_.resolveName("image_noise"),5);
+			syncNoise_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> >
+				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image>(5),
+				*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_);
+			syncNoise_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));
+		} else {
+			sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
+			 	 (message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),
+			 			*subscriberDepth_,*subscriberConfidence_);
+			sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2));
+		}
 	} else {
 		//-- Synchronize the image messages received from Realsense Sensor
 		/*
@@ -201,7 +212,8 @@ void FastFusionWrapper::run() {
 		*/
 	}
 
-	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/camera/depth/points", 5, &FastFusionWrapper::registerPointCloudCallback,this);
+	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
+	ros::Duration(0.1).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
@@ -212,28 +224,38 @@ void FastFusionWrapper::run() {
 
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
-										  const sensor_msgs::ImageConstPtr& msgConf) {
+										  const sensor_msgs::ImageConstPtr& msgConf,
+										  const sensor_msgs::ImageConstPtr& msgNoise) {
 	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
 		return;
 	}
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
 //-- The depth image is undistorted according to the intrinsics of the depth camera.
 //--
-	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf;
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
+	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf, imgNoiseDist, imgNoise;
 	ros::Time timeMeas;
 	//-- Convert the incomming messages
 	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
 	getConfImageFromRosMsg(msgConf, &imgConfDist);
+	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
 	//-- Undistort the depth image
 	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
 	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
-
+	cv::undistort(imgNoiseDist, imgNoise, intrinsic_, distCoeff_);
+	cv::Mat bin = imgConf == 255;
+	cv::Mat mask;
+	imgConf.copyTo(mask,bin);
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
 	depthImageCorrection(imgDepthDist, &imgDepthCorr);
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
-			if (imgConf.at<unsigned char>(v,u)!= 255) {
+			if (mask.at<unsigned char>(v,u)!= 255) {
 				imgDepthCorr.at<unsigned short>(v,u) = 65000;
+				imgNoise.at<float>(v,u) = 0.0f;
 			}
 		}
 	}
@@ -241,10 +263,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	// Create Dummy RGB Frame
 	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
 
-	//-- Get time stamp of the incoming images
-	ros::Time timestamp = msgDepth->header.stamp;
-	broadcastTFchain(timestamp);
-	previous_ts_ = timestamp;
+
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -308,8 +327,70 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose);
+	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
 }
+
+void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
+										  const sensor_msgs::ImageConstPtr& msgConf) {
+	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
+		return;
+	}
+//-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
+//-- The depth image is undistorted according to the intrinsics of the depth camera.
+//-- No Depth noise data is available
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
+	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf;
+	ros::Time timeMeas;
+	//-- Convert the incomming messages
+	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
+	getConfImageFromRosMsg(msgConf, &imgConfDist);
+	//-- Undistort the depth image
+	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
+
+	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
+	depthImageCorrection(imgDepthDist, &imgDepthCorr);
+	for (int u = 0; u < imgDepthCorr.cols; u++) {
+		for (int v = 0; v < imgDepthCorr.rows; v++) {
+			if (imgConf.at<unsigned char>(v,u)!= 255) {
+				imgDepthCorr.at<unsigned short>(v,u) = 65000;
+			}
+		}
+	}
+	//imgDepth = imgDepthDist;
+	// Create Dummy RGB Frame
+	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(255,0,0));
+
+
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_, cam_id_,
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+	}
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+
+
+	//-- Fuse the imcoming Images into existing map
+	onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+}
+
+
+
 
 
 void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected) {
@@ -352,8 +433,6 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	if ((pcl_msg.header.stamp - previous_ts_).toSec() <= 0.05){
 			return;
 	}
-	std::cout << "in registerPointCloudCallback" << std::endl;
-	std::cout << "size of unsigned short = " << sizeof(unsigned short) << std::endl;
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	//-- Create RGB and Depth image from point cloud
@@ -453,7 +532,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 
 
 void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
-	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
+	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	if (testing_point_cloud_) {
 		pcl::io::savePLYFile ("/home/karrer/PointCloudRealsense.ply", pcl_cloud, false);
@@ -485,6 +564,11 @@ void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr
 	//depthImg2.convertTo(*depthImg,CV_16UC1);
 	//*depthImg = *depthImg*5000;
 
+}
+
+void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgNoise, cv::Mat *noiseImg) {
+//-- Function to convert ROS-image (noise) message to OpenCV-Mat.
+	*noiseImg = cv_bridge::toCvCopy(msgNoise, sensor_msgs::image_encodings::TYPE_32FC1)->image;
 }
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
