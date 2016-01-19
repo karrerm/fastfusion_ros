@@ -56,7 +56,7 @@ _currentMeshInterleaved(NULL),
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
 	//-- Create Visualization Thread
-	//_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
+	_visualizationThread = new boost::thread(&OnlineFusionROS::visualize, this);
 }
 
 OnlineFusionROS::~OnlineFusionROS()

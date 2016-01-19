@@ -1473,7 +1473,6 @@ void update8AddLoopAVXSingleInteger
 //	float pxx, pxy, pxz, pyx, pyy, pyz, pzx, pzy, pzz;
 	float pyx, pyy, pyz, pzx, pzy, pzz;
 
-
 	float d11 = m11*fleafScale;
 	float d21 = m21*fleafScale;
 	float d31 = m31*fleafScale;

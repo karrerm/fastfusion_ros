@@ -201,7 +201,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 
 #define MAXCAMDISTANCE 4.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 8.0
+#define MIN_WEIGHT_FOR_SURFACE 0.1
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
@@ -238,7 +238,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 1.0f
 
-#define BANDWIDTHFACTOR 10.0
+#define BANDWIDTHFACTOR 1.0
 #define BRICKLENGTH 8
 
 
@@ -262,7 +262,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define DISTANCEMINEXPWEIGHT  0.000001f // this is default
 #define DISTANCEMINEXPWEIGHT  0.005f
 
-#define WEIGHT_FACTOR 3.0f
+#define WEIGHT_FACTOR 1.0f
 
 //float cutoff = expf(-distanceWeightSigma*(threshold-distanceWeightEpsilon)*(threshold-distanceWeightEpsilon));
 //return (float)(distance<distanceWeightEpsilon) +
