@@ -212,7 +212,7 @@ void FastFusionWrapper::run() {
 		*/
 	}
 
-	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/camera/depth/points", 5, &FastFusionWrapper::registerPointCloudCallback,this);
+	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
 	ros::Duration(0.1).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
@@ -532,7 +532,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 
 
 void FastFusionWrapper::pclCallback(const sensor_msgs::PointCloud2 pcl_msg) {
-	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
+	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
 	pcl::fromROSMsg (pcl_msg,pcl_cloud);
 	if (testing_point_cloud_) {
 		pcl::io::savePLYFile ("/home/karrer/PointCloudRealsense.ply", pcl_cloud, false);
