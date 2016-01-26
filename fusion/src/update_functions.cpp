@@ -1635,6 +1635,18 @@ void update8AddLoopAVXSingleInteger
 							_mm256_mul_ps(_mm256_set1_ps(1000.0f), noiseMask),
 									_mm256_load_ps(noise8));
 
+			// if (noise[i] <= lowerBoundary) noise[i] = lowerBoundary, else noise[i] = noise[i],
+			// This is due to the reciprocal influence of the noise to the weights --> keep weights <= 1
+			__m256 noiseBoundMask =
+					_mm256_and_ps(_mm256_set1_ps(1.0f),
+							_mm256_cmp_ps(noise8wo0, _mm256_set1_ps(MIN_NOISE_LEVEL), _CMP_LT_OS));
+
+			__m256 noise8bounded =
+					_mm256_add_ps(
+							_mm256_mul_ps(noise8wo0,
+									_mm256_andnot_ps(noiseBoundMask, _mm256_set1_ps(1.0f))),
+							_mm256_mul_ps(
+									noiseBoundMask, _mm256_set1_ps(MIN_NOISE_LEVEL)));
 
 			// (float)(dInc<DISTANCEWEIGHTEPSILON)
 			__m256 maskFront =
@@ -1667,7 +1679,7 @@ void update8AddLoopAVXSingleInteger
 			__m256 wInc =
 					_mm256_mul_ps(
 							_mm256_mul_ps(
-									wInc1, _mm256_rcp_ps(noise8wo0)), _mm256_set1_ps(MIN_NOISE_LEVEL));
+									wInc1, _mm256_rcp_ps(noise8bounded)), _mm256_set1_ps(MIN_NOISE_LEVEL));
 
 //			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
