@@ -222,6 +222,34 @@ void FastFusionWrapper::run() {
 	ros::shutdown();
 }
 
+void FastFusionWrapper::jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, const float min, const float max) {
+//-- Compute colored image according to the jet colormap based on the noise level. The parameters min and max define the
+//-- limits of the noise. Min corresponds to blue, max to red. Values that are lower than min are set to min, values that are
+//-- greater than max are set to max.
+	//-- Check if imgRGB is already allocated
+	if (!(imgNoise.size() == imgRGB->size())) {
+		imgRGB->create(imgNoise.rows, imgNoise.cols, CV_8UC3);
+	}
+
+	//-- Loop through image and compute color value
+	double noiseVal = 0.0f;
+	ValueToColor colorMapper(min,max);
+	std::cout << "cols:" << imgNoise.cols << ", rows:" << imgNoise.rows << std::endl;
+	for (size_t u = 0; u < imgNoise.cols; u++) {
+		for (size_t v = 0; v < imgNoise.rows;v++) {
+			size_t ind = v*imgNoise.cols + u;
+			noiseVal = (double) imgNoise.at<float>(v,u);//imgNoise.data[ind];
+			color rgb = colorMapper.compute(noiseVal);
+			imgRGB->at<cv::Vec3b>(v,u)[0] = rgb.b;
+			imgRGB->at<cv::Vec3b>(v,u)[1] = rgb.g;
+			imgRGB->at<cv::Vec3b>(v,u)[2] = rgb.r;
+			//colData[3*(imgNoise.cols*v + u) + 0] = rgb.b;
+			//colData[3*(imgNoise.cols*v + u) + 1] = rgb.g;
+			//colData[3*(imgNoise.cols*v + u) + 2] = rgb.r;
+		}
+	}
+
+}
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf,
@@ -263,7 +291,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	// Create Dummy RGB Frame
 	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
 
-
+	jetColorNoise(imgNoise,&imgRGB,0.005,0.05);
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
