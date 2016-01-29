@@ -1418,10 +1418,10 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 	float m31 = pInv.r31; float m32 = pInv.r32;
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
-	boost::thread *distanceUpdateThread = NULL;
+	std::thread *distanceUpdateThread = NULL;
 
 	if(_threaded){
-	distanceUpdateThread = new boost::thread(	updateWrapperFloat,SDFUpdateParameterFloat(
+	distanceUpdateThread = new std::thread(	updateWrapperFloat,SDFUpdateParameterFloat(
 			(const float*)data,(const uchar*)rgb[2].data,(const uchar*)rgb[1].data,(const uchar*)rgb[0].data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
@@ -1716,9 +1716,9 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
 	//-- If fusion is threaded --> add thread
-	boost::thread *distanceUpdateThread = NULL;
+	std::thread *distanceUpdateThread = NULL;
 	if(_threaded){
-	distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+	distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
 			(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
@@ -2132,11 +2132,11 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	float m31 = pInv.r31; float m32 = pInv.r32;
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
-	boost::thread *distanceUpdateThread = NULL;
+	std::thread *distanceUpdateThread = NULL;
 
 	if(_threaded){
 		//-- Add Null pointer in SDFUpdateParameterInteger to where the depth noise data would be
-		distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+		distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
 			(const ushort*)depthdata, NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
@@ -2499,7 +2499,7 @@ std::vector<int> FusionMipMapCPU::addMap(std::vector<cv::Mat> depthImages, std::
 			delete _imageSaveThread;
 			fprintf(stderr,"\nTime for joining Image Save Thread: %f",((double)cv::getTickCount()-timeJoin)/cv::getTickFrequency());
 		}
-		_imageSaveThread = new boost::thread(imageSaveFunctionFloat,depthImages,rgbImages,oldSize);
+		_imageSaveThread = new std::thread(imageSaveFunctionFloat,depthImages,rgbImages,oldSize);
 	}
 
 	std::vector<int> result;
@@ -2557,7 +2557,7 @@ std::vector<int> FusionMipMapCPU::addMap(std::vector<cv::Mat> depthImages, std::
 			delete _imageSaveThread;
 			fprintf(stderr,"\nTime for joining Image Save Thread: %f",((double)cv::getTickCount()-timeJoin)/cv::getTickFrequency());
 		}
-		_imageSaveThread = new boost::thread(imageSaveFunctionInteger,depthImages,rgbImages,oldSize);
+		_imageSaveThread = new std::thread(imageSaveFunctionInteger,depthImages,rgbImages,oldSize);
 	}
 
 	std::vector<int> result;
@@ -3284,7 +3284,8 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 	pcl::PointXYZRGB tempPoint;
 	unsigned int meshSize = 0;
 	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
-	boost::mutex::scoped_lock updateLock(_pointCloudUpdate);
+	{ // Mutex Scope
+	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
 	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
 	for(size_t i=0;i<meshcellsSize;i++){
 //		fprintf(stderr," %li",i);
@@ -3300,8 +3301,9 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 			_currentPointCloud->push_back(tempPoint);
 
 		}
+	} // End Mutex Scope
 	}
-	updateLock.unlock();
+	//updateLock.unlock();
 
 //	*mesh = *((*meshCells)[11585].meshinterleaved);
 	double timeAfter = (double)cv::getTickCount();
@@ -3356,13 +3358,13 @@ bool FusionMipMapCPU::updateMeshes()
 //			MeshSeparate *separate = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = separate;
 			MeshInterleaved *interleaved = _meshCurrent; _meshCurrent = _meshNext; _meshNext = interleaved;
 			_meshingStartFrame = _framesAdded;
-//			_meshThread = new boost::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+//			_meshThread = new std::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 //					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
-			//_meshThread = new boost::thread(boost::bind(meshWrapperInterleave,  &_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//_meshThread = new std::thread(boost::bind(meshWrapperInterleave,  &_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes,currentPointCloud,_1,  _2, _3, _4, _5, _6, _7, _8, _9, _10));
-			//_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//_meshThread = new std::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,_currentPointCloud);
-			_meshThread = new boost::thread(&FusionMipMapCPU::meshWrapperInterleaved,this);
+			_meshThread = new std::thread(&FusionMipMapCPU::meshWrapperInterleaved,this);
 		}
 		else{
 //			fprintf(stderr,"\nUpdating Meshes in same thread");
@@ -3390,9 +3392,8 @@ bool FusionMipMapCPU::updateMeshes()
 }
 
 pcl::PointCloud<pcl::PointXYZRGB> FusionMipMapCPU::getCurrentPointCloud(void) {
-	boost::mutex::scoped_lock updateLock(_pointCloudUpdate);
+	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
 	return *_currentPointCloud;
-	updateLock.unlock();
 }
 
 FloatVertex::FloatVertex_(float px, float py, float pz)
@@ -3476,7 +3477,7 @@ CellUpdate &FusionMipMapCPU::getMeshCellsUpdate()
 			delete _updateMessageThread;
 		}
 		MeshSeparate *temp = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = temp;
-		_updateMessageThread = new boost::thread(cellupdateWrapper,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_updateNext);
+		_updateMessageThread = new std::thread(cellupdateWrapper,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_updateNext);
 	}
 	else{
 		cellupdateWrapper(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
@@ -4504,7 +4505,7 @@ void FusionMipMapCPU::startLoopClosure()
 	_loopClosureDone = false;
 	if(_loopClosureThread) delete _loopClosureThread;
 
-	_loopClosureThread = new boost::thread(loopClosureWrapper,_loopClosureFusion,&_posemap,&_loopClosureDone);
+	_loopClosureThread = new std::thread(loopClosureWrapper,_loopClosureFusion,&_posemap,&_loopClosureDone);
 
 }
 

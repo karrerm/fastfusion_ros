@@ -16,10 +16,13 @@
 #include "treeandbrick_incremental.hpp"
 #include <pcl/common/common_headers.h>
 #include <pcl/PCLPointCloud2.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include <list>
 
-#include <boost/thread.hpp>
+//#include <boost/thread.hpp>
 
 
 typedef class FloatVertex_
@@ -310,7 +313,7 @@ protected:
 	bool setInitialVolume(int minX, int minY, int minZ, int maxX, int maxY, int maxZ);
 
 	// Mutex to block update of point cloud
-	boost::mutex _pointCloudUpdate;
+	std::mutex _pointCloudUpdate;
 
 
 
@@ -478,8 +481,8 @@ protected:
 	MCNSplit _boundary;
 	MCNCompact _boundaryCompact;
 
-	boost::thread *_meshThread;
-	boost::thread *_updateMessageThread;
+	std::thread *_meshThread;
+	std::thread *_updateMessageThread;
 	bool _threadMeshing;
 	unsigned int _degenerate_faces;
 	MarchingCubesIndexed _mc;
@@ -511,8 +514,8 @@ protected:
 	volumetype _nLeavesLoopUsed;
 	FusionMipMapCPU *_loopClosureFusion;
 	std::multimap<float,size_t> _posemap;
-	boost::thread *_imageSaveThread;
-	boost::thread *_loopClosureThread;
+	std::thread *_imageSaveThread;
+	std::thread *_loopClosureThread;
 
 
 	bool _loopClosureMode;
