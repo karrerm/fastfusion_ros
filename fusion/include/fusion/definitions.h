@@ -199,13 +199,21 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define SWITCH_MESHCELLS_SPLIT
 #endif
 
-#define MAXCAMDISTANCE 10.0
-#define MIN_WEIGHT_FOR_SURFACE 0.0
+#define MAXCAMDISTANCE 4.0
+//#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
+#define MIN_WEIGHT_FOR_SURFACE 0.5
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
 #define FRUSTUM_FAR 1.0
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 15.1.2016
+//#define USE_NOISE_FOR_SCALE 	// Using the depth noise for brick scale
+#define REFERENCE_NOISE 0.025f	// Reference Value for the brick scale using the noise values
+#define MIN_NOISE_LEVEL 0.008f	// Minimal expected noise (used to scale noise dependent weighting)
+///////////////////////////////////////////////////////////////////////////////////////////////////
 #define REFERENCE_DEPTH 1.0f
 //#define SCALE_VARIANCE
 //#define SCALE_DEVIATION
@@ -226,7 +234,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define DISTANCETHRESHOLD 0.5f // stable
 //#define DISTANCETHRESHOLD 0.05f // current
 //#define DISTANCETHRESHOLD 0.02f // current
-#define DISTANCETHRESHOLD 0.01f // test
+#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 0.002f // test
 //#define DISTANCETHRESHOLD 1.0f
 
@@ -247,11 +255,14 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define WEIGHT_LINEAR_NARROW
 //#define WEIGHT_GAUSS
 //#define WEIGHT_GAUSS_NARROW
-#define DISTANCEWEIGHTSIGMA 0.05f
-#define DISTANCEWEIGHTEPSILON 0.005f
-#define DISTANCEMINEXPWEIGHT 0.000001f
+//#define DISTANCEWEIGHTSIGMA 0.05f // this is default
+#define DISTANCEWEIGHTSIGMA 0.02f
 
-#define WEIGHT_FACTOR 3.0f
+#define DISTANCEWEIGHTEPSILON 0.005f
+//#define DISTANCEMINEXPWEIGHT  0.000001f // this is default
+#define DISTANCEMINEXPWEIGHT  0.005f
+
+#define WEIGHT_FACTOR 2.0f
 
 //float cutoff = expf(-distanceWeightSigma*(threshold-distanceWeightEpsilon)*(threshold-distanceWeightEpsilon));
 //return (float)(distance<distanceWeightEpsilon) +

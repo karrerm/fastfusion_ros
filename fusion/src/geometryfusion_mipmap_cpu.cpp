@@ -1418,10 +1418,10 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 	float m31 = pInv.r31; float m32 = pInv.r32;
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
-	boost::thread *distanceUpdateThread = NULL;
+	std::thread *distanceUpdateThread = NULL;
 
 	if(_threaded){
-	distanceUpdateThread = new boost::thread(	updateWrapperFloat,SDFUpdateParameterFloat(
+	distanceUpdateThread = new std::thread(	updateWrapperFloat,SDFUpdateParameterFloat(
 			(const float*)data,(const uchar*)rgb[2].data,(const uchar*)rgb[1].data,(const uchar*)rgb[0].data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
@@ -1599,6 +1599,350 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 
 }
 
+int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
+		const cv::Mat &rgb, float scaling, float maxcamdistance) {
+//-- addMap: Function to add new depth information to the SDF-tree structure. This version also
+//-- takes depth noise information into account which is i.e. available from a ToF camera.
+//-- When no such information is available use overloaded function!
+	//-- Extract Camera Parameters (intrinsics and extrinsics)
+	cv::Mat rot = caminfo.getRotation();
+	cv::Mat trans = caminfo.getTranslation();
+	cv::Mat intr = caminfo.getIntrinsic();
+	camPamsFloat p(
+			rot.at<double>(0,0)/_scale, rot.at<double>(0,1)/_scale, rot.at<double>(0,2)/_scale,
+			rot.at<double>(1,0)/_scale, rot.at<double>(1,1)/_scale, rot.at<double>(1,2)/_scale,
+			rot.at<double>(2,0)/_scale, rot.at<double>(2,1)/_scale, rot.at<double>(2,2)/_scale,
+			(trans.at<double>(0,0) - _offset.x)/_scale,
+			(trans.at<double>(1,0) - _offset.y)/_scale,
+			(trans.at<double>(2,0) - _offset.z)/_scale,
+			intr.at<double>(0,0), intr.at<double>(1,1),
+			intr.at<double>(0,2), intr.at<double>(1,2));
+	//-- Extract Tree information about sizes
+	_nLeavesBeforeLastFrame = _nLeavesUsed;
+	volumetype branchesBeforeLastFrame = _nBranchesUsed;
+	size_t meshCellsBeforeLastFrame = _meshCells.size();
+	//-- Extract image Data
+	const unsigned short *depthData = (ushort*) depth.data;
+	const unsigned char *rgbData = (unsigned char*)rgb.data;
+	const float *noiseData = (float *)noiseImg.data;
+
+	//-- Empty Queue
+	for(volumetype i=0;i<_nLeavesTotal;i++) _queueIndexOfLeaf[i] = MAXLEAFNUMBER;
+	_nLeavesQueuedSurface = 0;
+	_nLeavesQueuedFrustum = 0;
+
+	bool firstMap = _nLeavesUsed == 0;
+	//-- Compute Bounding box
+	if(!_n){
+		_boxMin.x = _boxMin.y = _boxMin.z = 1e6;
+		_boxMax.x = _boxMax.y = _boxMax.z = -1e6;
+		fprintf(stderr,"\nComputing Initial Bounding Box");
+		computeBoundingboxIntCPU(p,depthData,scaling,maxcamdistance,
+				depth.cols,depth.rows,_bandwidth,
+				&_boxMin.x,&_boxMin.y,&_boxMin.z,&_boxMax.x,&_boxMax.y,&_boxMax.z);
+
+		if(setInitialVolume(_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z)){
+			fprintf(stderr,"\nInteger Bounding Box of first frame: [%i %i %i]-[%i %i %i]",
+					_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z);
+		}
+		else{
+			fprintf(stderr,"\nERROR: Initial Bounding Box Computation failed!");
+			fprintf(stderr,"\nErroneous Bounding Box of first frame: [%i %i %i]-[%i %i %i]",
+					_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z);
+		}
+		p = 	camPamsFloat(
+				rot.at<double>(0,0)/_scale, rot.at<double>(0,1)/_scale, rot.at<double>(0,2)/_scale,
+				rot.at<double>(1,0)/_scale, rot.at<double>(1,1)/_scale, rot.at<double>(1,2)/_scale,
+				rot.at<double>(2,0)/_scale, rot.at<double>(2,1)/_scale, rot.at<double>(2,2)/_scale,
+				(trans.at<double>(0,0) - _offset.x)/_scale,
+				(trans.at<double>(1,0) - _offset.y)/_scale,
+				(trans.at<double>(2,0) - _offset.z)/_scale,
+				intr.at<double>(0,0), intr.at<double>(1,1),
+				intr.at<double>(0,2), intr.at<double>(1,2));
+	}
+
+
+	double time1 = (double)cv::getTickCount();
+
+	//-- Correct for different image size of depth and color image (not used -> take care of it before!!)
+	_differentImageSize |= _imageWidth!=depth.cols || _imageHeight!=depth.rows;
+	if(_imageWidth!=depth.cols || _imageHeight!=depth.rows){
+		_imageWidth = depth.cols; _imageHeight = depth.rows;
+		if(_sharedBoxes) delete [] _sharedBoxes;
+		_sharedBoxes = new sidetype3[_imageWidth*_imageHeight*2];
+		if(_pxp) delete _pxp; if(_pyp) delete _pyp;
+	  int alignResult = posix_memalign((void**)&_pxp,16,_imageWidth*sizeof(float));
+	  alignResult += posix_memalign((void**)&_pyp,16,_imageHeight*sizeof(float));
+	  if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!");
+		for(int x=0;x<_imageWidth;x++){
+			_pxp[x] = ((float)x-p.cx)/p.fx;
+		}
+		for(int y=0;y<_imageHeight;y++){
+			_pyp[y] = ((float)y-p.cy)/p.fy;
+		}
+		_newBudsSinceMeshingToQueue.subtreeBuds->resize(_imageWidth*_imageHeight);
+		_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->resize(_imageWidth*_imageHeight);
+		_newBudsSinceMeshingToQueue.leafBuds->resize(_imageWidth*_imageHeight);
+	  if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!");
+	}
+
+	_boxMin.x = _boxMin.y = _boxMin.z = 0;
+	_boxMax.x = _boxMax.y = _boxMax.z = _n-1;
+
+	//-- Compute inverse of the extrinsics (used for transformation into camera coordinates)
+	_threadValid = true;
+	CameraInfo caminfo2 = caminfo;
+	caminfo2.setExtrinsic(caminfo2.getExtrinsicInverse());
+	cv::Mat rot2 = caminfo2.getRotation();
+	cv::Mat trans2 = caminfo2.getTranslation();
+	cv::Mat intr2 = caminfo2.getIntrinsic();
+	camPamsFloat pInv(
+	rot2.at<double>(0,0), rot2.at<double>(0,1), rot2.at<double>(0,2),
+	rot2.at<double>(1,0), rot2.at<double>(1,1), rot2.at<double>(1,2),
+	rot2.at<double>(2,0), rot2.at<double>(2,1), rot2.at<double>(2,2),
+	rot2.at<double>(0,0)*_offset.x + rot2.at<double>(0,1)*_offset.y + rot2.at<double>(0,2)*_offset.z + trans2.at<double>(0,0),
+	rot2.at<double>(1,0)*_offset.x + rot2.at<double>(1,1)*_offset.y + rot2.at<double>(1,2)*_offset.z + trans2.at<double>(1,0),
+	rot2.at<double>(2,0)*_offset.x + rot2.at<double>(2,1)*_offset.y + rot2.at<double>(2,2)*_offset.z + trans2.at<double>(2,0),
+	intr2.at<double>(0,0), intr2.at<double>(1,1),
+	intr2.at<double>(0,2), intr2.at<double>(1,2));
+
+//	bool colorMap2 = _useColor && (rgb.cols==depth.cols&&rgb.rows==depth.rows);
+	//-- Extract individual matrix entries of rigid body transformation
+	float m11 = pInv.r11; float m12 = pInv.r12;
+	float m13 = pInv.r13; float m14 = pInv.t1 ;
+	float m21 = pInv.r21; float m22 = pInv.r22;
+	float m23 = pInv.r23; float m24 = pInv.t2 ;
+	float m31 = pInv.r31; float m32 = pInv.r32;
+	float m33 = pInv.r33; float m34 = pInv.t3;
+
+	//-- If fusion is threaded --> add thread
+	std::thread *distanceUpdateThread = NULL;
+	if(_threaded){
+	distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+			(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
+			_imageWidth,_imageHeight,
+			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
+			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
+			_leafNumberSurface,_leafPos,_leafScale,
+			_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+	}
+
+	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
+	__attribute__ ((aligned (16))) float qxp2[_imageWidth];
+	__attribute__ ((aligned (16))) float qxp3[_imageWidth];
+
+	for(int x=0;x<_imageWidth;x++){
+		qxp1[x] = p.r11*_pxp[x];
+		qxp2[x] = p.r21*_pxp[x];
+		qxp3[x] = p.r31*_pxp[x];
+	}
+
+	__attribute__ ((aligned (16))) float qyp1[_imageHeight];
+	__attribute__ ((aligned (16))) float qyp2[_imageHeight];
+	__attribute__ ((aligned (16))) float qyp3[_imageHeight];
+
+	for(int y=0;y<_imageHeight;y++){
+		qyp1[y] = p.r12*_pyp[y] + p.r13;
+		qyp2[y] = p.r22*_pyp[y] + p.r23;
+		qyp3[y] = p.r32*_pyp[y] + p.r33;
+	}
+
+
+#ifndef SEPARATE_MESHCELL_STRUCTURE
+	transformLoopSimPrecalculatedNeg_vis(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
+			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
+			depthdata,scaling,maxcamdistance,
+			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
+			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber
+			,_meshCells,_meshCellIndicesBranch,_meshCellIndicesLeaf,_leafParent,_boundary,_performIncrementalMeshing);
+
+#else
+	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
+			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
+			depthData, noiseData,scaling,maxcamdistance,
+			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
+			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber,_leafParent,
+			_newBudsSinceMeshingToQueue.subtreeBuds->data(),
+			_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->data(),
+			_newBudsSinceMeshingToQueue.leafBuds->data(),
+			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
+	eprintf("\n%i new Subtrees and %i new Leaves this Map",
+			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
+	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
+		_newBudsSinceMeshingToAccumulate.subtreeBuds->push_back((*_newBudsSinceMeshingToQueue.subtreeBuds)[i]);
+		_newBudsSinceMeshingToAccumulate.subtreeBudsParentLeaf->push_back((*_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf)[i]);
+	}
+	for(size_t i=0;i<_numberOfQueuedLeafBuds;i++){
+		_newBudsSinceMeshingToAccumulate.leafBuds->push_back((*_newBudsSinceMeshingToQueue.leafBuds)[i]);
+	}
+	_numberOfQueuedTreeBuds = _numberOfQueuedLeafBuds = 0;
+
+#endif
+
+
+//	fprintf(stderr,"!");
+	double time2 = (double)cv::getTickCount();
+	double time3 = (double)cv::getTickCount();
+
+	//-- Check if tree needs to grow --> grow it
+	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
+			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
+		grow();
+	}
+
+	double time4;
+	//-- If threaded --> join it, otherwise perform update now.
+	_threadValid = false;
+	if(_threaded){
+		distanceUpdateThread->join();
+		delete distanceUpdateThread;
+		time3 = (double)cv::getTickCount();
+		time4 = (double)cv::getTickCount();
+	}
+	else{
+//		fprintf(stderr, "U");
+		updateWrapperInteger(SDFUpdateParameterInteger(
+				(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
+				_imageWidth,_imageHeight,
+				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
+				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
+				_leafNumberSurface,_leafPos,_leafScale,
+				_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+
+		time4 = (double)cv::getTickCount();
+
+//		fprintf(stderr,"!");
+	}
+
+	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
+			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
+	}
+
+
+	double time5 = (double)cv::getTickCount();
+
+
+
+	if(_nBranchesUsed > _nBranchesTotal){
+		_performIncrementalMeshing = false;
+		fprintf(stderr,"\nTree is out of Memory by at least %i Branches: %i vs. %i",
+				_nBranchesUsed+1-_nBranchesTotal,_nBranchesUsed,_nBranchesTotal);
+	}
+	if(_nLeavesUsed > _nLeavesTotal){
+		_performIncrementalMeshing = false;
+		fprintf(stderr,"\nTree is out of Memory by at least %i Leaves: %i vs. %i",
+				_nLeavesUsed+1-_nLeavesTotal,_nLeavesUsed,_nLeavesTotal);
+	}
+
+	if(firstMap && _nLeavesUsed != _nLeavesQueuedSurface){
+		fprintf(stderr,"\nNot all allocated Leaves are queued:\n");
+		if(_nLeavesUsed >= _nLeavesTotal){
+			fprintf(stderr,"\nThis is due to the Tree being full.");
+		}
+	}
+
+
+#ifndef DEBUG_NO_LEAFCELLS
+	if(_performIncrementalMeshing){
+
+#ifdef SEPARATE_MESHCELL_STRUCTURE
+		//TODO: Das hier in den Nachbarthread migrieren
+//		if(_newBudsSinceMeshingToClear.subtreeBuds->size() ||
+//				_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size() ||
+//				_newBudsSinceMeshingToClear.leafBuds->size()){
+//			fprintf(stderr,"\nERROR: Vector of Branches queued for MeshCell Structure"
+//					" Creation not yet empty: %li %li %li",
+//					_newBudsSinceMeshingToClear.subtreeBuds->size(),
+//					_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size(),
+//					_newBudsSinceMeshingToClear.leafBuds->size());
+//		}
+//		BudsAnchor temp = _newBudsSinceMeshingToClear;
+//		_newBudsSinceMeshingToClear = _newBudsSinceMeshingToAccumulate;
+//		_newBudsSinceMeshingToAccumulate = temp;
+//		_treeSizeForMeshing = _nBranchesUsed;
+
+		beforeUpdateMeshCellStructure();
+
+		updateMeshCellStructure();
+
+		afterUpdateMeshCellStructure();
+
+//		_treeSizeSinceMeshing = _treeSizeForMeshing;
+//
+//		pushLeafQueueForMeshing();
+
+#else
+
+		eprintf("\nPushing Mesh Cell queue");
+		pushMeshCellQueue();
+		eprintf("\nMesh Cell queue pushed");
+#endif
+
+
+	}
+#endif
+
+	//-- Timing statistics
+	_avgTimeQueueSurface += time2-time1;
+	_avgTimeQueueFrustum += time3-time2;
+	_avgTimeBricksSurface += time4-time3;
+	_avgTimeBricksFrustum += time5-time4;
+	_sumTimeOfAllFrames += time5-time1;
+	_framesAdded++;
+	//-- Log statistics if required
+	if(_loggingEnabled){
+		_frameStatistics.push_back(FrameStatistic());
+		_frameStatistics.back().leavesQueued = _nLeavesQueuedSurface;
+		_frameStatistics.back().newBranches = _nBranchesUsed-branchesBeforeLastFrame;
+		_frameStatistics.back().newLeaves = _nLeavesUsed-_nLeavesBeforeLastFrame;
+		_frameStatistics.back().newMeshCells = _meshCells.size()-meshCellsBeforeLastFrame;
+		_frameStatistics.back().timeSDFUpdate = time4-time3;
+		_frameStatistics.back().timeTraversal = time2-time1;
+	}
+
+	_averageLeaves += _nLeavesQueuedSurface;
+
+	if((_framesAdded-1)%25==0){
+
+		size_t meshIndicesBranchSize = 0;
+		size_t meshIndicesBranchEmptySize = 0;
+		for(size_t i=0;i<_meshCellIndicesBranch.size();i++){
+#ifdef BRANCHNEIGHBORHOOD_REFERECE
+		if(_meshCellIndicesBranch[i]) meshIndicesBranchSize += _meshCellIndicesBranch[i]->size();
+#else
+			meshIndicesBranchSize += _meshCellIndicesBranch[i].size();
+#endif
+			meshIndicesBranchEmptySize += sizeof(_meshCellIndicesBranch[i]);
+		}
+
+		eprintf("\nMesh Cell Indices Branch use %li Bytes, and %li Bytes empty\n",
+				meshIndicesBranchSize,meshIndicesBranchEmptySize);
+		eprintf("\nSize of a Mesh Cell: %li = %li + %li + 4*%li + 16*%li",sizeof(MeshCell),
+				sizeof(int),sizeof(MeshInterleaved*),sizeof(sidetype),sizeof(volumetype));
+		eprintf("\nSize of all Mesh Cells: %li * %li = %li",_meshCells.capacity(),sizeof(MeshCell),_meshCells.capacity()*sizeof(MeshCell));
+
+		eprintf("\nEmpty Size of a Mesh: %li, empty Size of all Meshes %li * %li = %li",
+				sizeof(MeshInterleaved),_meshCells.size(),sizeof(MeshInterleaved),_meshCells.size()*sizeof(MeshInterleaved));
+		eprintf("\nMesh Cell Indices Leaf use %li Bytes",_meshCellIndicesLeaf.capacity()*sizeof(LeafNeighborhood));
+
+		size_t verticesSize = 0;
+		size_t facesSize = 0;
+		size_t colorsSize = 0;
+		for(size_t i=0;i<_meshCells.size();i++){
+			verticesSize += _meshCells[i].meshinterleaved->vertices.size();
+			facesSize += _meshCells[i].meshinterleaved->faces.size();
+			colorsSize += _meshCells[i].meshinterleaved->colors.size();
+		}
+		verticesSize *= sizeof(Vertex3f);
+		facesSize *= sizeof(unsigned int);
+		colorsSize *= sizeof(Color3b);
+		eprintf("\nMeshesSize: Vertices: %li , Faces: %li , Color: %li",
+				verticesSize,facesSize,colorsSize);
+	}
+
+	return _nLeavesQueuedSurface;
+
+}
 
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 		float scaling, float maxcamdistance)
@@ -1788,11 +2132,12 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	float m31 = pInv.r31; float m32 = pInv.r32;
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
-	boost::thread *distanceUpdateThread = NULL;
+	std::thread *distanceUpdateThread = NULL;
 
 	if(_threaded){
-	distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
-			(const ushort*)depthdata, scaling, maxcamdistance, (const uchar*)rgb.data,
+		//-- Add Null pointer in SDFUpdateParameterInteger to where the depth noise data would be
+		distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+			(const ushort*)depthdata, NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -1841,7 +2186,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 #else
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
-			depthdata,scaling,maxcamdistance,
+			depthdata,NULL,scaling,maxcamdistance,
 			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
 			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber,_leafParent,
 			_newBudsSinceMeshingToQueue.subtreeBuds->data(),
@@ -1897,7 +2242,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	else{
 //		fprintf(stderr, "U");
 		updateWrapperInteger(SDFUpdateParameterInteger(
-				(const ushort*)depthdata, scaling, maxcamdistance, (const uchar*)rgb.data,
+				(const ushort*)depthdata,  NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
@@ -2154,7 +2499,7 @@ std::vector<int> FusionMipMapCPU::addMap(std::vector<cv::Mat> depthImages, std::
 			delete _imageSaveThread;
 			fprintf(stderr,"\nTime for joining Image Save Thread: %f",((double)cv::getTickCount()-timeJoin)/cv::getTickFrequency());
 		}
-		_imageSaveThread = new boost::thread(imageSaveFunctionFloat,depthImages,rgbImages,oldSize);
+		_imageSaveThread = new std::thread(imageSaveFunctionFloat,depthImages,rgbImages,oldSize);
 	}
 
 	std::vector<int> result;
@@ -2212,7 +2557,7 @@ std::vector<int> FusionMipMapCPU::addMap(std::vector<cv::Mat> depthImages, std::
 			delete _imageSaveThread;
 			fprintf(stderr,"\nTime for joining Image Save Thread: %f",((double)cv::getTickCount()-timeJoin)/cv::getTickFrequency());
 		}
-		_imageSaveThread = new boost::thread(imageSaveFunctionInteger,depthImages,rgbImages,oldSize);
+		_imageSaveThread = new std::thread(imageSaveFunctionInteger,depthImages,rgbImages,oldSize);
 	}
 
 	std::vector<int> result;
@@ -2823,7 +3168,7 @@ MeshInterleaved result(3);
 
 return result;
 }
-
+/*
 void meshWrapperInterleaved
 (
 		std::list<size_t> *meshCellQueue,
@@ -2834,9 +3179,11 @@ void meshWrapperInterleaved
 		treeinfo *info,
 		volatile int *meshingDone,
 		MeshInterleaved *mesh,
-		std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes
+		//std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes,
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud
 )
 {
+	std::cout << "MeshWrapper!!" << std::endl;
 	size_t numVerticesQueue = 0;
 	size_t numFacesQueue = 0;
 
@@ -2869,24 +3216,104 @@ void meshWrapperInterleaved
 	mesh->vertices.reserve(numVerticesTotal);
 	mesh->colors.reserve(numVerticesTotal);
 	mesh->faces.reserve(numFacesTotal);
-
+	currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	pcl::PointXYZRGB tempPoint;
+	unsigned int meshSize = 0;
 	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
 	for(size_t i=0;i<meshcellsSize;i++){
 //		fprintf(stderr," %li",i);
 		*mesh += *((*meshCells)[i].meshinterleaved);
+		meshSize = (*meshCells)[i].meshinterleaved->vertices.size();
+		for (unsigned int j = 0; j < meshSize; j++) {
+			tempPoint.x = (*meshCells)[i].meshinterleaved->vertices[j].x;
+			tempPoint.y = (*meshCells)[i].meshinterleaved->vertices[j].y;
+			tempPoint.z = (*meshCells)[i].meshinterleaved->vertices[j].z;
+			tempPoint.r = (*meshCells)[i].meshinterleaved->colors[j].r;
+			tempPoint.g = (*meshCells)[i].meshinterleaved->colors[j].g;
+			tempPoint.b = (*meshCells)[i].meshinterleaved->colors[j].b;
+			currentPointCloud->push_back(tempPoint);
+
+		}
 	}
+
 //	*mesh = *((*meshCells)[11585].meshinterleaved);
 	double timeAfter = (double)cv::getTickCount();
-
+	std::cout << "Used Time for meshing = " << timeMiddle-timeBefore << ", mesh size = " << currentPointCloud->size() << std::endl;
 	double timeUpdate = timeMiddle-timeBefore;
 	double timeSum = timeAfter-timeMiddle;
 
-	if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
+	//if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
 	eprintf("\nMeshes summed up.");
 	*meshingDone = 0;
 }
+*/
+void FusionMipMapCPU::meshWrapperInterleaved(void)
+{
+	size_t numVerticesQueue = 0;
+	size_t numFacesQueue = 0;
+
+	size_t oldSize = _meshCellQueueCurrent.size();
+	size_t meshcellsSize = _meshCells.size();
+	double timeBefore = (double)cv::getTickCount();
+
+	for(std::list<size_t>::iterator i=_meshCellQueueCurrent.begin();i!=_meshCellQueueCurrent.end();){
+		if(*i>=_meshCellsCopy.size()) fprintf(stderr,"\nERROR:Wrong Index in MeshCell Queue!: %li >= %li",*i,_meshCellsCopy.size());
+		_meshCellsCopy[*i].updateMesh(_treeinfo,_leafParentCopy,_mc);
+		numVerticesQueue += _meshCellsCopy[*i].meshinterleaved->vertices.size();
+		numFacesQueue += _meshCellsCopy[*i].meshinterleaved->faces.size();
+		i++;
+		_meshCellQueueCurrent.pop_front();
+	}
 
 
+//	(*meshCells)[11585].updateMesh(*info,*leafParent,*mc);
+//	fprintf(stderr,"\nLast leaf for Mesh Cell %li is %i",11585,(*meshCells)[11585].lastLeaf[0]);
+	double timeMiddle = (double)cv::getTickCount();
+
+	*_meshNext = MeshInterleaved(3);
+
+	size_t numVerticesTotal = 0;
+	size_t numFacesTotal = 0;
+	for(unsigned int i=0;i<meshcellsSize;i++){
+		numVerticesTotal += _meshCellsCopy[i].meshinterleaved->vertices.size();
+		numFacesTotal += _meshCellsCopy[i].meshinterleaved->faces.size();
+	}
+	_meshNext->vertices.reserve(numVerticesTotal);
+	_meshNext->colors.reserve(numVerticesTotal);
+	_meshNext->faces.reserve(numFacesTotal);
+	pcl::PointXYZRGB tempPoint;
+	unsigned int meshSize = 0;
+	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
+	{ // Mutex Scope
+	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
+	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	for(size_t i=0;i<meshcellsSize;i++){
+//		fprintf(stderr," %li",i);
+		*_meshNext += *(_meshCellsCopy[i].meshinterleaved);
+		meshSize = _meshCellsCopy[i].meshinterleaved->vertices.size();
+		for (unsigned int j = 0; j < meshSize; j++) {
+			tempPoint.x = _meshCellsCopy[i].meshinterleaved->vertices[j].x;
+			tempPoint.y = _meshCellsCopy[i].meshinterleaved->vertices[j].y;
+			tempPoint.z = _meshCellsCopy[i].meshinterleaved->vertices[j].z;
+			tempPoint.r = _meshCellsCopy[i].meshinterleaved->colors[j].r;
+			tempPoint.g = _meshCellsCopy[i].meshinterleaved->colors[j].g;
+			tempPoint.b = _meshCellsCopy[i].meshinterleaved->colors[j].b;
+			_currentPointCloud->push_back(tempPoint);
+
+		}
+	} // End Mutex Scope
+	}
+	//updateLock.unlock();
+
+//	*mesh = *((*meshCells)[11585].meshinterleaved);
+	double timeAfter = (double)cv::getTickCount();
+	double timeUpdate = timeMiddle-timeBefore;
+	double timeSum = timeAfter-timeMiddle;
+
+	//if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
+	eprintf("\nMeshes summed up.");
+	_meshingDone = 0;
+}
 
 bool FusionMipMapCPU::updateMeshes()
 {
@@ -2919,7 +3346,7 @@ bool FusionMipMapCPU::updateMeshes()
 
 		_meshCellsCopy = _meshCells;
 		_leafParentCopy = _leafParent;
-
+		_threadMeshing = true;
 		if(_threadMeshing){
 			if(_meshThread){
 				_meshThread->join();
@@ -2931,10 +3358,13 @@ bool FusionMipMapCPU::updateMeshes()
 //			MeshSeparate *separate = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = separate;
 			MeshInterleaved *interleaved = _meshCurrent; _meshCurrent = _meshNext; _meshNext = interleaved;
 			_meshingStartFrame = _framesAdded;
-//			_meshThread = new boost::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+//			_meshThread = new std::thread(meshWrapperSeparate,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
 //					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
-			_meshThread = new boost::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
-					&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+			//_meshThread = new std::thread(boost::bind(meshWrapperInterleave,  &_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes,currentPointCloud,_1,  _2, _3, _4, _5, _6, _7, _8, _9, _10));
+			//_meshThread = new std::thread(meshWrapperInterleaved,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
+			//		&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,_currentPointCloud);
+			_meshThread = new std::thread(&FusionMipMapCPU::meshWrapperInterleaved,this);
 		}
 		else{
 //			fprintf(stderr,"\nUpdating Meshes in same thread");
@@ -2943,8 +3373,9 @@ bool FusionMipMapCPU::updateMeshes()
 //			meshWrapperSeparate(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
 //					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshSeparateNext,&_meshTimes);
 			eprintf("\nCalling meshWrapperInterleaved without Threading");
-			meshWrapperInterleaved(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
-					&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes);
+			//meshWrapperInterleaved(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,
+			//		&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_meshNext,&_meshTimes, currentPointCloud);
+			meshWrapperInterleaved();
 //			separate = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = separate;
 			interleaved = _meshCurrent; _meshCurrent = _meshNext; _meshNext = interleaved;
 			double diffTime;
@@ -2958,6 +3389,11 @@ bool FusionMipMapCPU::updateMeshes()
 	}
 	return false;
 
+}
+
+pcl::PointCloud<pcl::PointXYZRGB> FusionMipMapCPU::getCurrentPointCloud(void) {
+	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
+	return *_currentPointCloud;
 }
 
 FloatVertex::FloatVertex_(float px, float py, float pz)
@@ -3041,7 +3477,7 @@ CellUpdate &FusionMipMapCPU::getMeshCellsUpdate()
 			delete _updateMessageThread;
 		}
 		MeshSeparate *temp = _meshSeparateCurrent; _meshSeparateCurrent = _meshSeparateNext; _meshSeparateNext = temp;
-		_updateMessageThread = new boost::thread(cellupdateWrapper,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_updateNext);
+		_updateMessageThread = new std::thread(cellupdateWrapper,&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,&_meshCellsCopy,&_leafParentCopy,&_mc,&_treeinfo,&_meshingDone,_updateNext);
 	}
 	else{
 		cellupdateWrapper(&_meshCellQueueCurrent,_meshCellIsQueuedCurrent,
@@ -4069,7 +4505,7 @@ void FusionMipMapCPU::startLoopClosure()
 	_loopClosureDone = false;
 	if(_loopClosureThread) delete _loopClosureThread;
 
-	_loopClosureThread = new boost::thread(loopClosureWrapper,_loopClosureFusion,&_posemap,&_loopClosureDone);
+	_loopClosureThread = new std::thread(loopClosureWrapper,_loopClosureFusion,&_posemap,&_loopClosureDone);
 
 }
 

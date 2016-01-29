@@ -14,9 +14,15 @@
 #include "geometryfusion_aos.hpp"
 #include "treeandbrick.hpp"
 #include "treeandbrick_incremental.hpp"
+#include <pcl/common/common_headers.h>
+#include <pcl/PCLPointCloud2.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #include <list>
 
-#include <boost/thread.hpp>
+//#include <boost/thread.hpp>
 
 
 typedef class FloatVertex_
@@ -121,13 +127,16 @@ public:
 			std::vector<cv::Mat> rgb = std::vector<cv::Mat>(3));
 	int addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 			float scaling, float maxcamdistance);
+	//-- Adding single image with depth noise information
+	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
+			const cv::Mat &rgb, float scaling, float maxcamdistance);
 	//Adding multiple images up to the next keyframe
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<std::vector<cv::Mat> > rgbImages = std::vector<std::vector<cv::Mat> >(),
 			volatile long int *poseNumber = NULL);
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<cv::Mat> rgbImages, volatile long int *poseNumber = NULL);
-
+	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud();
 	MeshSeparate getMeshSeparateMarchingCubes(MeshSeparate mesh = MeshSeparate(3));
 	MeshInterleaved getMeshInterleavedMarchingCubes(MeshInterleaved mesh = MeshInterleaved(3));
 //	MeshSeparate getMeshMarchingCubesNonindexed(MeshSeparate mesh = MeshSeparate(3));
@@ -283,6 +292,7 @@ public:
 
 protected:
 
+  void meshWrapperInterleaved(void);
   void queryPointDepthSingle(sidetype px, sidetype py, sidetype pz, sidetype brickLengthTarget);
   void queryBoxDepthSingle(sidetype3 minPos, sidetype3 maxPos, sidetype brickLengthTarget);
 
@@ -302,6 +312,8 @@ protected:
 	bool split();
 	bool setInitialVolume(int minX, int minY, int minZ, int maxX, int maxY, int maxZ);
 
+	// Mutex to block update of point cloud
+	std::mutex _pointCloudUpdate;
 
 
 
@@ -401,7 +413,8 @@ protected:
 			const sidetype &_brickLength,
 			const int &_imageWidth, const int &_imageHeight,
 			int3 &_boxMin, int3 &_boxMax,
-			const ushort *data, float scaling, float maxcamdistance,
+			const ushort *data, const float *noiseData,
+			float scaling, float maxcamdistance,
 			volumetype *_tree,
 			volumetype &_nBranchesUsed,
 			const volumetype &_nLeavesTotal, volumetype &_nLeavesUsed, volumetype &_nLeavesQueued,
@@ -468,8 +481,8 @@ protected:
 	MCNSplit _boundary;
 	MCNCompact _boundaryCompact;
 
-	boost::thread *_meshThread;
-	boost::thread *_updateMessageThread;
+	std::thread *_meshThread;
+	std::thread *_updateMessageThread;
 	bool _threadMeshing;
 	unsigned int _degenerate_faces;
 	MarchingCubesIndexed _mc;
@@ -478,6 +491,7 @@ protected:
 	ParentArray _leafParentCopy;
 	int _meshingDone;
 	MeshSeparate *_meshSeparateCurrent;
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
 	MeshSeparate *_meshSeparateNext;
 	MeshInterleaved *_meshCurrent;
 	MeshInterleaved *_meshNext;
@@ -500,8 +514,8 @@ protected:
 	volumetype _nLeavesLoopUsed;
 	FusionMipMapCPU *_loopClosureFusion;
 	std::multimap<float,size_t> _posemap;
-	boost::thread *_imageSaveThread;
-	boost::thread *_loopClosureThread;
+	std::thread *_imageSaveThread;
+	std::thread *_loopClosureThread;
 
 
 	bool _loopClosureMode;

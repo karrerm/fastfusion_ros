@@ -16,6 +16,7 @@
 //#include <pcl/features/normal_3d.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/point_picking_event.h>
 //#include <pcl/console/parse.h>
 
 #include <pcl/PolygonMesh.h>
@@ -27,6 +28,11 @@
 #include <pcl/PCLPointCloud2.h>
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
+
+//-- KdTree for NN-search
+#include <pcl/search/kdtree.h>
+#include <pcl/kdtree/kdtree_flann.h>
+
 
 #include <auxiliary/multivector.h>
 
@@ -73,6 +79,9 @@
 
 #include <deque>
 #include <list>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 
 class OnlineFusionROS
@@ -81,7 +90,7 @@ public:
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
 	//-- Initialization of the parameters read from the ROS parameter file
-	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float threshold, int depthChecks,
+	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
 			   bool saveMesh, std::string fileName);
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
@@ -91,39 +100,60 @@ public:
 	float _imageDepthScale;
 	float _maxCamDistance;
 
-
 	bool _newMesh;
 	bool _fusionActive;
 	bool _fusionAlive;
 
-	bool _threadImageReading;
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
+	bool _saveScreenshot;
 
+	bool _threadImageReading;
+//-- Update Fusion
+	// No Noise Data available
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
+	// With Noise Data
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose);
+
+	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
 	int _frameCounter;
 	CameraInfo _currentPose;
 	cv::Mat _currentDepthImg;
 
+	pcl::PointXYZ cameraCenter_;
 	//-- Function to stop the fusion
 	void stop();
 
 
 protected :
+	bool _isSetup;
 	//-- Visualization Members
 	void visualize();
-	boost::thread * _visualizationThread;
+	std::thread * _visualizationThread;
 	bool _update;
 	bool _runVisualization;
-	boost::mutex _visualizationUpdateMutex;
+	std::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
+	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
+	//
+	void pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*);
+	bool pointIsClicked, sphereIsInitialized;
+	std::vector<pcl::PointXYZ> clickedPoints;
+	unsigned int numberClickedPoints;
+	float cubeSideLength;
+	Eigen::Vector3f cubePos;
+	Eigen::Quaternionf cubePose;
+
 
 	//-- Fusion Thread Members
 	bool _threadFusion;
-	boost::thread *_fusionThread;
-	boost::mutex _fusionUpdateMutex;
+	std::thread * _fusionThread;
+	std::mutex _fusionUpdateMutex;
+	bool _newDataInQueue;
+	std::condition_variable _fusionThreadCondition;
 	std::queue<cv::Mat> _queueRGB;
 	std::queue<cv::Mat> _queueDepth;
+	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
 	void fusionWrapperROS(void);
 	bool _isReady;
@@ -139,6 +169,8 @@ protected :
 	float _cx; float _cy; float _cz;
 	bool _saveMesh;
 	std::string _fileName;
+
+
 
 	//-- Probably unused variables (maybe can get rid of them)
 	long long _lastComputedFrame;
@@ -161,6 +193,9 @@ protected :
 	bool _createMeshList;
 	bool _lightingEnabled;
 	bool _colorEnabled;
+	struct cameraFrustum{
+		Eigen::Vector3f tl0,tr0,br0,bl0,c0;
+	} cameraFrustum_;
 
 };
 

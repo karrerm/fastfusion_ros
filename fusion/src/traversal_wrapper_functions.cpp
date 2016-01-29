@@ -476,7 +476,6 @@ inline void transformLoopSimPrecalculatedNeg_vis
 		,bool performIncrementalMeshing
 )
 {
-
 	int vxt[_imageWidth];
 	int vyt[_imageWidth];
 	int vzt[_imageWidth];
@@ -582,7 +581,8 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 		const sidetype &_brickLength,
 		const int &_imageWidth, const int &_imageHeight,
 		int3 &_boxMin, int3 &_boxMax,
-		const ushort *data, float scaling, float maxcamdistance,
+		const ushort *data, const float *noiseData,
+		float scaling, float maxcamdistance,
 		volumetype *_tree,
 		volumetype &_nBranchesUsed,
 		const volumetype &_nLeavesTotal, volumetype &_nLeavesUsed, volumetype &_nLeavesQueued,
@@ -597,7 +597,6 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 		,volumetype _treeSizeSinceMeshing
 )
 {
-
 	int vxt[_imageWidth];
 	int vyt[_imageWidth];
 	int vzt[_imageWidth];
@@ -609,7 +608,7 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 		for(int x=0;x<_imageWidth;x+=4){
 
 			const ushort *pz = data+(y*_imageWidth+x);
-
+			const float *noise = noiseData + (y*_imageWidth + x);
 			int vx[4] = {
 					(int)((qxp1[x  ] + qyp1[y])*(float)(pz[0])*scaling + t1),
 					(int)((qxp1[x+1] + qyp1[y])*(float)(pz[1])*scaling + t1),
@@ -677,12 +676,23 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 //					else pMax.z = temp;
 
 					if(vx[k]>=0 && (sidetype)vx[k]<_n && vy[k]>=0 && (sidetype)vy[k]<_n && vz[k]>=0 && (sidetype)vz[k]<_n){
+#ifndef USE_NOISE_FOR_SCALE
+						//-- Use depth as indicator for the scale
 						queryPointDepthSingle_func_subtree(vx[k],vy[k],vz[k],leafScaleFunc((float)(pz[k])*scaling,_brickLength),
 								_n,_brickLength,_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueued,
 								_leafNumber,_leafPos,_leafScale,_queueIndexOfLeaf,_leafParent,
 								anchorTreeBuds,anchorTreeBudsParentLeaf,anchorLeafBuds,
 								_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,
 								_treeSizeSinceMeshing);
+#else
+						//-- Use noise as indicator for the scale
+						queryPointDepthSingle_func_subtree(vx[k],vy[k],vz[k],leafScaleFuncNoise(noise[k],_brickLength),
+								_n,_brickLength,_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueued,
+								_leafNumber,_leafPos,_leafScale,_queueIndexOfLeaf,_leafParent,
+								anchorTreeBuds,anchorTreeBudsParentLeaf,anchorLeafBuds,
+								_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,
+								_treeSizeSinceMeshing);
+#endif
 					}
 				}
 				else{
