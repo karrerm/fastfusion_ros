@@ -79,7 +79,9 @@
 
 #include <deque>
 #include <list>
-
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 
 class OnlineFusionROS
@@ -126,10 +128,10 @@ protected :
 	bool _isSetup;
 	//-- Visualization Members
 	void visualize();
-	boost::thread * _visualizationThread;
+	std::thread * _visualizationThread;
 	bool _update;
 	bool _runVisualization;
-	boost::mutex _visualizationUpdateMutex;
+	std::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
 	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
@@ -145,8 +147,10 @@ protected :
 
 	//-- Fusion Thread Members
 	bool _threadFusion;
-	boost::thread *_fusionThread;
-	boost::mutex _fusionUpdateMutex;
+	std::thread * _fusionThread;
+	std::mutex _fusionUpdateMutex;
+	bool _newDataInQueue;
+	std::condition_variable _fusionThreadCondition;
 	std::queue<cv::Mat> _queueRGB;
 	std::queue<cv::Mat> _queueDepth;
 	std::queue<cv::Mat> _queueNoise;
