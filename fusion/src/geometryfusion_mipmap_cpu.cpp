@@ -717,6 +717,7 @@ _threadMeshing(false)
 	_boxMin.x = _boxMin.y = _boxMin.z = _boxMax.x = _boxMax.y = _boxMax.z = 0;
 
 	fprintf(stderr,"\nLoop Closure Constructor done");
+	_pclPointCloudInitialized = false;
 }
 
 FusionMipMapCPU::~FusionMipMapCPU()
@@ -3287,6 +3288,7 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 	{ // Mutex Scope
 	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
 	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	_pclPointCloudInitialized = true;
 	for(size_t i=0;i<meshcellsSize;i++){
 //		fprintf(stderr," %li",i);
 		*_meshNext += *(_meshCellsCopy[i].meshinterleaved);
@@ -3392,8 +3394,13 @@ bool FusionMipMapCPU::updateMeshes()
 }
 
 pcl::PointCloud<pcl::PointXYZRGB> FusionMipMapCPU::getCurrentPointCloud(void) {
+	if (_pclPointCloudInitialized){
 	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
 	return *_currentPointCloud;
+	} else {
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZRGB>);
+		return *tmp;
+	}
 }
 
 FloatVertex::FloatVertex_(float px, float py, float pz)

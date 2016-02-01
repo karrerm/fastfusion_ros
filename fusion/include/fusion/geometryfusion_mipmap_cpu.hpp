@@ -492,6 +492,7 @@ protected:
 	int _meshingDone;
 	MeshSeparate *_meshSeparateCurrent;
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
+	bool _pclPointCloudInitialized;
 	MeshSeparate *_meshSeparateNext;
 	MeshInterleaved *_meshCurrent;
 	MeshInterleaved *_meshNext;
