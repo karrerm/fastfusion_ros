@@ -81,6 +81,8 @@ protected:
 	std::string world_id_;
 	std::string cam_id_;
 
+	bool runMapping_;
+	int frameCounter_;
 	bool use_pmd_, depth_noise_;
 	bool testing_point_cloud_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
