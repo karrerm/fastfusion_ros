@@ -48,6 +48,7 @@ _currentMeshInterleaved(NULL),
 	_cx = 0.0f; _cy = 0.0f; _cz = 0.0f;
 	_isReady = true;
 	_frameCounter = 0;
+	_modelCounter = 0;
 	_fusionActive = true;
 	_fusionAlive = true;
 	_update = false;
@@ -56,7 +57,7 @@ _currentMeshInterleaved(NULL),
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
 	//-- Create Visualization Thread
-	_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
+	//_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
 }
 
 OnlineFusionROS::~OnlineFusionROS()
@@ -79,27 +80,43 @@ OnlineFusionROS::~OnlineFusionROS()
 
 void OnlineFusionROS::stop() {
 //-- Stop the fusion process and save the current mesh if required
-
+	std::cout << "Gets into the stop() function " << std::endl;
 	_runVisualization = false;
 	if (_threadFusion) {
-		std::unique_lock<std::mutex> updateLock(_fusionUpdateMutex);
-		_runFusion = false;
-		_newDataInQueue = true;
-		_fusionThreadCondition.notify_one();
-		updateLock.unlock();
-		std::cout << "Before Joining" << std::endl;
-		_fusionThread->join();
-		std::cout <<"After Joining"<< std::endl;
+		if (_fusionThread) {
+			std::unique_lock<std::mutex> updateLock(_fusionUpdateMutex);
+			_runFusion = false;
+			_newDataInQueue = true;
+			_fusionThreadCondition.notify_one();
+			updateLock.unlock();
+			_fusionThread->join();
+			delete _fusionThread;
+			_fusionThread = NULL;
+			_newMesh = false;
+			std::cout << "Deleted Fusion Thread and set it to NULL " << std::endl;
+		}
 	}
 	_runFusion = false;
 	//-- wait for last frame fusion is finished.
 	while (_fusionActive);
 	_fusionAlive = false;
-	//delete _fusionThread;
 
 	//-- Save current Mesh
 	if (_saveMesh) {
 		_currentMeshInterleaved->writePLY(_fileName,false);
+	}
+	if(_fusion) {
+		_offset = _fusion->offset();
+		delete _fusion;
+		_fusion = NULL;
+	}
+	if(_currentMeshForSave) {
+		delete _currentMeshForSave;
+		_currentMeshForSave = NULL;
+	}
+	if(_currentMeshInterleaved) {
+		delete _currentMeshInterleaved;
+		_currentMeshInterleaved = NULL;
 	}
 	//-- End Visualization Thread
 	//viewer->close();
@@ -108,20 +125,54 @@ void OnlineFusionROS::stop() {
 	//delete _visualizationThread;
 }
 
+bool OnlineFusionROS::startNewMap() {
+//-- Start a new map, only if initialization was performed before. Also Check if currently a process is running.  If any
+//-- of these conditions is not met, return false
+	//-- Check if a FusionMipMapCPU object exists
+	if (_fusion || !_isSetup) {
+		std::cout << "breaks in startNewMap()" << std::endl;
+		return false;
+	}
+	if (!_queueDepth.empty()) {
+		std::queue<cv::Mat> empty;
+		std::swap( _queueDepth, empty );
+	}
+	if (!_queueRGB.empty()) {
+		std::queue<cv::Mat> empty;
+		std::swap( _queueRGB, empty );
+	}
+	if (!_queueNoise.empty()) {
+		std::queue<cv::Mat> empty;
+		std::swap( _queueNoise, empty );
+	}
+	if (!_queuePose.empty()) {
+		std::queue<CameraInfo> empty;
+		std::swap( _queuePose, empty );
+	}
+	std::cout << "In function startNewMap()" << std::endl;
+	_fusion = new FusionMipMapCPU(_offset.x,_offset.y,_offset.z,_scale, _distThreshold,0,true);
+	_fusion->setThreadMeshing(_threadMeshing);
+	_fusion->setIncrementalMeshing(true);
+	_fusionActive = true;
+//	_fusionAlive = true;
+	_update = false;
+	_runFusion = true;
+	return true;
+}
 
 void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
 								bool saveMesh, std::string fileName){
 //-- Initialize FusionMipMapCPU-class (_fusion)
-	_fusion = new FusionMipMapCPU(0,0,0,scale,distThreshold,0,true);
-	_fusion->setThreadMeshing(meshingThread);
-	_fusion->setDepthChecks(depthChecks);
 	_imageDepthScale = imageScale;
-	_fusion->setIncrementalMeshing(true);
+	_scale = scale;
+	_distThreshold = distThreshold;
+	_threadMeshing = meshingThread;
 	_threadFusion = fusionThread;
 	_saveMesh = saveMesh;
 	_fileName = fileName;
 	_isSetup = true;
-
+	_offset.x = _offset.y = _offset.z = 0.0f;
+	startNewMap();
 }
 /*  Not needed in this implementation
 typedef struct FusionParameter_{
@@ -142,6 +193,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 //-- Fusion-Wrapper member to enable threading the fusion process. To buffer the data needed for the fusion
 //-- (rgb-Image,depth-image, camera-pose), a std::queue with Mutex locking is used.
 	//-- Initialize datatypes to store the current values
+	_fusionActive = true;
 	cv::Mat currImgRGB, currImgDepth, currNoise;
 	CameraInfo currPose;
 	unsigned int framesProcessed = 0;
@@ -153,10 +205,10 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 			_fusionThreadCondition.wait(locker);
 		}
 		if (!_runFusion){
+			std::cout << "tries break" << std::endl;
 			locker.unlock();
 			break;
 		}
-		std::cout << "DataSize: " << _queueRGB.size() << std::endl;
 		std::queue<cv::Mat> queueRGB, queueDepth, queueNoise;
 		std::queue<CameraInfo> queuePose;
 		for (size_t i = 0; i < _queueRGB.size(); i++) {
@@ -186,6 +238,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				currNoise = queueNoise.front();
 				queueNoise.pop();
 				//-- Add Map and perform update
+				std::cout << "About to add Map" << std::endl;
 				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
 				_newMesh = _fusion->updateMeshes();
 			} else {
@@ -203,6 +256,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 			}
 		}
 	}
+	std::cout << "Exited While loop of fusion thread" << std::endl;
 	_fusionActive = false;
 	
 }	
@@ -403,6 +457,11 @@ void OnlineFusionROS::visualize() {
     		//-- Update Viewer
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
+    		if (points_ptr->points.size() > 0) {
+    			std::string modelName = "/home/karrer/PointClouds/Models/Model" + std::to_string(_modelCounter)  + ".ply";
+    			pcl::io::savePLYFile(modelName,*points_ptr);
+    			_modelCounter++;
+
     		//-- KdTree for NN-search
     		/*
     		std::clock_t begin = std::clock();
@@ -429,13 +488,16 @@ void OnlineFusionROS::visualize() {
     			//viewer->removePolygonMesh("visualization pc");
     			//viewer->addPolygonMesh(triangles,"visualization pc");
     		} else {
+    			std::cout << "Crashes before adding point cloud " << std::endl;
     			//viewer->addPointCloud(point_cloud_ptr, "visualization pc");
     			viewer->addPointCloud(points_ptr, "visualization pc");
     			// Mesh visualization --> slow
     			//viewer->addPolygonMesh(triangles,"visualization pc");
     			pointcloudInit = true;
     		}
+    		}
             _update = false;
+
             point_cloud_ptr->clear();
             //polygons.clear();
         }
@@ -617,6 +679,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		//-- The fusion process is threaded
 		if(!_fusionThread){
 			//-- If not yet initialize --> initialize fusion thread
+			std::cout << "Adds new Fusion Thread" << std::endl;
 			_fusionThread = new std::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
 		}
@@ -639,6 +702,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 			std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
+			std::cout << "getMeshInterleavedMarchingCubes() " << std::endl;
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
 			}

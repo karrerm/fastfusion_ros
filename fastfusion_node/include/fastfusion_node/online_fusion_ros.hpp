@@ -15,6 +15,7 @@
 #include <pcl/common/common_headers.h>
 //#include <pcl/features/normal_3d.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/point_picking_event.h>
 //#include <pcl/console/parse.h>
@@ -107,6 +108,12 @@ public:
 	bool _saveScreenshot;
 
 	bool _threadImageReading;
+
+	//-- Starting new Map
+	bool startNewMap();
+	float _scale;
+	float _distThreshold;
+	bool _threadMeshing;
 //-- Update Fusion
 	// No Noise Data available
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
@@ -115,7 +122,8 @@ public:
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
-	int _frameCounter;
+	bool isAlive(){ return _fusionAlive;};
+	int _frameCounter, _modelCounter;
 	CameraInfo _currentPose;
 	cv::Mat _currentDepthImg;
 
@@ -157,7 +165,7 @@ protected :
 	std::queue<CameraInfo> _queuePose;
 	void fusionWrapperROS(void);
 	bool _isReady;
-
+	float3 _offset;
 	//-- Meshing Members
 	std::vector<PointerMeshDraw*> _meshesDraw;
 	PointerMeshDraw *_currentMesh;
