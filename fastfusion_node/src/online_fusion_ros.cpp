@@ -80,7 +80,6 @@ OnlineFusionROS::~OnlineFusionROS()
 
 void OnlineFusionROS::stop() {
 //-- Stop the fusion process and save the current mesh if required
-	std::cout << "Gets into the stop() function " << std::endl;
 	_runVisualization = false;
 	if (_threadFusion) {
 		if (_fusionThread) {
@@ -93,7 +92,6 @@ void OnlineFusionROS::stop() {
 			delete _fusionThread;
 			_fusionThread = NULL;
 			_newMesh = false;
-			std::cout << "Deleted Fusion Thread and set it to NULL " << std::endl;
 		}
 	}
 	_runFusion = false;
@@ -130,7 +128,6 @@ bool OnlineFusionROS::startNewMap() {
 //-- of these conditions is not met, return false
 	//-- Check if a FusionMipMapCPU object exists
 	if (_fusion || !_isSetup) {
-		std::cout << "breaks in startNewMap()" << std::endl;
 		return false;
 	}
 	if (!_queueDepth.empty()) {
@@ -149,7 +146,6 @@ bool OnlineFusionROS::startNewMap() {
 		std::queue<CameraInfo> empty;
 		std::swap( _queuePose, empty );
 	}
-	std::cout << "In function startNewMap()" << std::endl;
 	_fusion = new FusionMipMapCPU(_offset.x,_offset.y,_offset.z,_scale, _distThreshold,0,true);
 	_fusion->setThreadMeshing(_threadMeshing);
 	_fusion->setIncrementalMeshing(true);
@@ -238,7 +234,6 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				currNoise = queueNoise.front();
 				queueNoise.pop();
 				//-- Add Map and perform update
-				std::cout << "About to add Map" << std::endl;
 				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
 				_newMesh = _fusion->updateMeshes();
 			} else {
@@ -256,7 +251,6 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 			}
 		}
 	}
-	std::cout << "Exited While loop of fusion thread" << std::endl;
 	_fusionActive = false;
 	
 }	
@@ -702,7 +696,6 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 			std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
-			std::cout << "getMeshInterleavedMarchingCubes() " << std::endl;
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
 			}
