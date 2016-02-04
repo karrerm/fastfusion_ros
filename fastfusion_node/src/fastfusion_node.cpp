@@ -384,7 +384,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf) {
-	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || runMapping_){
+	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 		return;
 	}
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
@@ -439,7 +439,9 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	if (runMapping_) {
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	}
 }
 
 
@@ -626,7 +628,7 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
 	} else {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
