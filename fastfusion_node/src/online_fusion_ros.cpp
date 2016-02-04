@@ -80,6 +80,7 @@ OnlineFusionROS::~OnlineFusionROS()
 
 void OnlineFusionROS::stop() {
 //-- Stop the fusion process and save the current mesh if required
+	std::cout << "OnlineFusionROS::stop()!!!!!!!" << std::endl;
 	_runVisualization = false;
 	if (_threadFusion) {
 		if (_fusionThread) {
@@ -88,7 +89,9 @@ void OnlineFusionROS::stop() {
 			_newDataInQueue = true;
 			_fusionThreadCondition.notify_one();
 			updateLock.unlock();
+			std::cout << "Join thread" << std::endl;
 			_fusionThread->join();
+			std::cout << "delete Thread" << std::endl;
 			delete _fusionThread;
 			_fusionThread = NULL;
 			_newMesh = false;
@@ -116,6 +119,7 @@ void OnlineFusionROS::stop() {
 		delete _currentMeshInterleaved;
 		_currentMeshInterleaved = NULL;
 	}
+
 	//-- End Visualization Thread
 	//viewer->close();
 	//_visualizationThread->join();
@@ -127,6 +131,8 @@ bool OnlineFusionROS::startNewMap() {
 //-- Start a new map, only if initialization was performed before. Also Check if currently a process is running.  If any
 //-- of these conditions is not met, return false
 	//-- Check if a FusionMipMapCPU object exists
+	//delete _fusion;
+	//_fusion = NULL;
 	if (_fusion || !_isSetup) {
 		return false;
 	}
@@ -640,7 +646,6 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 //-- Update Fusion function when using it with noise data (from ToF camera)
 	if (!_threadFusion) {
 		//-- Unthreaded Fusion
-		std::cout << "Fusion is not threaded" << std::endl;
 		_fusionActive = true;
 		_frameCounter++;
 		_isReady = false;
@@ -656,7 +661,6 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		if(_pointermeshes[0]) delete _pointermeshes[0];
 		if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 		if(!_currentMeshInterleaved) {
-			std::cout << "Create New Mesh Interleaved" << std::endl;;
 			_currentMeshInterleaved = new MeshInterleaved(3);
 		}
 		//-- Generate new Mesh
@@ -673,7 +677,6 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		//-- The fusion process is threaded
 		if(!_fusionThread){
 			//-- If not yet initialize --> initialize fusion thread
-			std::cout << "Adds new Fusion Thread" << std::endl;
 			_fusionThread = new std::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
 		}
