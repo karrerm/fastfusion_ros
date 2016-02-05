@@ -3248,6 +3248,20 @@ void meshWrapperInterleaved
 	*meshingDone = 0;
 }
 */
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 5.02.2016
+bool FusionMipMapCPU::meshUpdateFinished(void) {
+	bool isFinished = false;
+	{
+		std::lock_guard<std::mutex> updateLock(_isMeshUpdatedMutex);
+		isFinished = (_meshingDone == 0);
+	}
+	return isFinished;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void FusionMipMapCPU::meshWrapperInterleaved(void)
 {
 	size_t numVerticesQueue = 0;
@@ -3303,8 +3317,8 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 			_currentPointCloud->push_back(tempPoint);
 
 		}
-	} // End Mutex Scope
 	}
+	} // End Mutex Scope
 	//updateLock.unlock();
 
 //	*mesh = *((*meshCells)[11585].meshinterleaved);
@@ -3314,7 +3328,10 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 
 	//if(meshTimes) meshTimes->push_back(FusionMipMapCPU::MeshStatistic(0,oldSize,meshcellsSize,timeUpdate,timeSum));
 	eprintf("\nMeshes summed up.");
+	{
+	std::lock_guard<std::mutex> updateLock(_isMeshUpdatedMutex);
 	_meshingDone = 0;
+	}
 }
 
 bool FusionMipMapCPU::updateMeshes()
@@ -3323,7 +3340,10 @@ bool FusionMipMapCPU::updateMeshes()
 	if(_meshingDone==0){
 		double time5 = (double)cv::getTickCount();
 		fprintf(stderr, "U[Q:%li]",_meshCellQueueNext.size());
+		{
+		std::lock_guard<std::mutex> updateLock(_isMeshUpdatedMutex);
 		_meshingDone = 1;
+		}
 		_treeinfo  = treeinfo(NULL,_brickLength,_brickSize,
 				std::min((double)_framesAdded,MIN_WEIGHT_FOR_SURFACE),
 				_offset,_scale,&_degenerate_faces,_nBranchesUsed,_nLeavesUsed,_tree,

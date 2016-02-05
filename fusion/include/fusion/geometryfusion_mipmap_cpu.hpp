@@ -122,6 +122,9 @@ public:
 			sidetype n = 0, bool color = true);
 	FusionMipMapCPU(FusionMipMapCPU *fusion, volumetype nLeavesTotalLoop);
 	~FusionMipMapCPU();
+	//-- Check if mesh is updated
+	bool meshUpdateFinished();
+
 	//Adding single images
 	int addMap(cv::Mat &depth, CameraInfo caminfo,
 			std::vector<cv::Mat> rgb = std::vector<cv::Mat>(3));
@@ -480,7 +483,7 @@ protected:
 
 	MCNSplit _boundary;
 	MCNCompact _boundaryCompact;
-
+	std::mutex _isMeshUpdatedMutex;
 	std::thread *_meshThread;
 	std::thread *_updateMessageThread;
 	bool _threadMeshing;
