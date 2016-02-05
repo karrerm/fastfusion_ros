@@ -80,21 +80,19 @@ OnlineFusionROS::~OnlineFusionROS()
 
 void OnlineFusionROS::stop() {
 //-- Stop the fusion process and save the current mesh if required
-	std::cout << "OnlineFusionROS::stop()!!!!!!!" << std::endl;
 	_runVisualization = false;
 	if (_threadFusion) {
 		if (_fusionThread) {
 			std::unique_lock<std::mutex> updateLock(_fusionUpdateMutex);
+			_newMesh = false;
 			_runFusion = false;
 			_newDataInQueue = true;
 			_fusionThreadCondition.notify_one();
 			updateLock.unlock();
-			std::cout << "Join thread" << std::endl;
 			_fusionThread->join();
-			std::cout << "delete Thread" << std::endl;
 			delete _fusionThread;
 			_fusionThread = NULL;
-			_newMesh = false;
+
 		}
 	}
 	_runFusion = false;
@@ -105,6 +103,9 @@ void OnlineFusionROS::stop() {
 	//-- Save current Mesh
 	if (_saveMesh) {
 		_currentMeshInterleaved->writePLY(_fileName,false);
+	}
+	while(!_fusion->meshUpdateFinished()) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 	if(_fusion) {
 		_offset = _fusion->offset();
@@ -174,7 +175,7 @@ void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float im
 	_fileName = fileName;
 	_isSetup = true;
 	_offset.x = _offset.y = _offset.z = 0.0f;
-	startNewMap();
+	//startNewMap();
 }
 /*  Not needed in this implementation
 typedef struct FusionParameter_{

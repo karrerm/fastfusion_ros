@@ -216,7 +216,7 @@ frameCounter_ = 0;
 	ros::Duration(3.0).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::Rate r(20);
-	bool halted = false;
+	bool halted = true;
 	while (ros::ok()) {
 		bool loadSuccess = node_.getParam("runMapping", runMapping_);
 		if (!loadSuccess) {
@@ -237,7 +237,9 @@ frameCounter_ = 0;
 		r.sleep();
 	}
 	//-- Stop the fusion process
-	//onlinefusion_.stop();
+	if (!halted){
+		onlinefusion_.stop();
+	}
 	//pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloudFrameTrans_, false);
 	ros::shutdown();
 }
