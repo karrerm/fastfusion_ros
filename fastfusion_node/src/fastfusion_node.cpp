@@ -211,22 +211,71 @@ void FastFusionWrapper::run() {
 		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
 		*/
 	}
-
+frameCounter_ = 0;
 	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
-	ros::Duration(0.1).sleep();
+	ros::Duration(3.0).sleep();
 	std::cout << "Start Spinning" << std::endl;
-	ros::spin();
+	ros::Rate r(20);
+	bool halted = true;
+	while (ros::ok()) {
+		bool loadSuccess = node_.getParam("runMapping", runMapping_);
+		if (!loadSuccess) {
+			//-- If no parameter could be found assume the mapping should be run
+			runMapping_ = true;
+		}
+		if (!runMapping_ && !halted) {
+			onlinefusion_.stop();
+			halted = true;
+		}
+		if (runMapping_ && halted) {
+			halted = false;
+			if (!onlinefusion_.startNewMap()){
+				halted = true;
+			}
+		}
+		ros::spinOnce();
+		r.sleep();
+	}
 	//-- Stop the fusion process
-	onlinefusion_.stop();
-	pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloudFrameTrans_, false);
+	if (!halted){
+		onlinefusion_.stop();
+	}
+	//pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloudFrameTrans_, false);
 	ros::shutdown();
 }
 
+void FastFusionWrapper::jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, const float min, const float max) {
+//-- Compute colored image according to the jet colormap based on the noise level. The parameters min and max define the
+//-- limits of the noise. Min corresponds to blue, max to red. Values that are lower than min are set to min, values that are
+//-- greater than max are set to max.
+	//-- Check if imgRGB is already allocated
+	if (!(imgNoise.size() == imgRGB->size())) {
+		imgRGB->create(imgNoise.rows, imgNoise.cols, CV_8UC3);
+	}
+
+	//-- Loop through image and compute color value
+	double noiseVal = 0.0f;
+	ValueToColor colorMapper(min,max);
+	for (size_t u = 0; u < imgNoise.cols; u++) {
+		for (size_t v = 0; v < imgNoise.rows;v++) {
+			size_t ind = v*imgNoise.cols + u;
+			noiseVal = (double) imgNoise.at<float>(v,u);//imgNoise.data[ind];
+			color rgb = colorMapper.compute(noiseVal);
+			imgRGB->at<cv::Vec3b>(v,u)[0] = rgb.b;
+			imgRGB->at<cv::Vec3b>(v,u)[1] = rgb.g;
+			imgRGB->at<cv::Vec3b>(v,u)[2] = rgb.r;
+			//colData[3*(imgNoise.cols*v + u) + 0] = rgb.b;
+			//colData[3*(imgNoise.cols*v + u) + 1] = rgb.g;
+			//colData[3*(imgNoise.cols*v + u) + 2] = rgb.r;
+		}
+	}
+
+}
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf,
 										  const sensor_msgs::ImageConstPtr& msgNoise) {
-	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
+	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 		return;
 	}
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
@@ -263,7 +312,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	// Create Dummy RGB Frame
 	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
 
-
+	jetColorNoise(imgNoise,&imgRGB,0.005,0.05);
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -283,7 +332,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	incomingFramePose = convertTFtoCameraInfo(transform);
 
 	//-- Compute Point Cloud for testing
-	if (testing_point_cloud_) {
+	if (false) {
 		//cv::imwrite("/home/karrer/imgDepth.png",imgDepth);
 		//cv::imwrite("/home/karrer/imgDepthDist.png",imgDepthDist);
 		Eigen::Quaterniond q;
@@ -307,18 +356,20 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 		pointCloudFrameTrans_.clear();
 		for (int i = 0; i < imgDepthCorr.rows; i++) {
 			for (int j = 0; j < imgDepthCorr.cols; j++) {
-				if (imgDepthCorr.at<unsigned short>(i,j) > 0) {
+				if ((imgDepthCorr.at<unsigned short>(i,j) > 0) && (imgDepthCorr.at<unsigned short>(i,j) < 50000)) {
 					tempPoint.z = (float)imgDepthCorr.at<unsigned short>(i,j)/5000.0f;
 					tempPoint.x = (float)(j-cx)/fx*tempPoint.z;
 					tempPoint.y = (float)(i-cy)/fy*tempPoint.z;
-					tempPoint.g = 255;
-					tempPoint.r = tempPoint.b = 0;
+					tempPoint.g = 200;
+					tempPoint.r = tempPoint.b = 200;
 					pointCloudFrame_.push_back(tempPoint);
 				}
 			}
 		}
 		pcl::transformPointCloud (pointCloudFrame_, pointCloudFrameTrans_, transformMat);
-		//pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloud, false);
+		std::string pcName = "/home/karrer/PointClouds/pcImg" + std::to_string(frameCounter_) + ".ply";
+		frameCounter_++;
+		pcl::io::savePLYFile (pcName, pointCloudFrameTrans_, false);
 		//pcl::io::savePCDFile ("/home/karrer/PointCloudImg.pcd", pointCloud, false);
 		//pointCloud.clear();
 	}
@@ -328,12 +379,14 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 	//-- Fuse the imcoming Images into existing map
 	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
+	if (runMapping_) {
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
+	}
 }
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf) {
-	if ((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05){
+	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 		return;
 	}
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
@@ -351,19 +404,21 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Undistort the depth image
 	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
 	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
-
+	cv::Mat bin = imgConf == 255;
+	cv::Mat mask;
+	imgConf.copyTo(mask,bin);
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
 	depthImageCorrection(imgDepthDist, &imgDepthCorr);
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
-			if (imgConf.at<unsigned char>(v,u)!= 255) {
+			if (mask.at<unsigned char>(v,u)!= 255) {
 				imgDepthCorr.at<unsigned short>(v,u) = 65000;
 			}
 		}
 	}
 	//imgDepth = imgDepthDist;
 	// Create Dummy RGB Frame
-	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(255,0,0));
+	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
 
 
 	//-- Get Pose (tf-listener)
@@ -386,7 +441,9 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	if (runMapping_) {
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	}
 }
 
 
@@ -430,7 +487,7 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 
 
 void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg) {
-	if ((pcl_msg.header.stamp - previous_ts_).toSec() <= 0.05){
+	if (((pcl_msg.header.stamp - previous_ts_).toSec() <= 0.05) && runMapping_){
 			return;
 	}
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
@@ -491,7 +548,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 //-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
 //-- Convert the messages to cv::Mat and wait for tf-transform corresponding to the frames
 //-- Push the data into the fastfusion pipeline for processing.
-	if ((msgRGB->header.stamp - previous_ts_).toSec() <= 0.03){
+	if (((msgRGB->header.stamp - previous_ts_).toSec() <= 0.03) && runMapping_){
 		return;
 	}
 
@@ -573,7 +630,7 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
 	} else {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}

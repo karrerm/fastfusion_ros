@@ -25,7 +25,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <pcl/io/ply_io.h>
-
+#include "fastfusion_node/valueToColor.hpp"
 
 class FastFusionWrapper {
 public:
@@ -46,6 +46,9 @@ protected:
 	void getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgNoise, cv::Mat *noiseImg);
 	void registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg);
 	void depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected);
+
+	//-- Color encoding
+	void jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, const float min, const float max);
 
 	//-- Pose Message to eigen (Rotation Matrix + Translation)
 	tf::TransformListener tfListener;
@@ -78,6 +81,8 @@ protected:
 	std::string world_id_;
 	std::string cam_id_;
 
+	bool runMapping_;
+	int frameCounter_;
 	bool use_pmd_, depth_noise_;
 	bool testing_point_cloud_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;

@@ -2,19 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 project(fastfusion_node)
 
 #################################################
-#	Find the necessary Pkgs 					#		
-#################################################
-find_package(catkin REQUIRED)
-find_package(catkin_simple REQUIRED)
-find_package(cmake_modules REQUIRED)
-find_package(PCL 1.7 REQUIRED)
-find_package(Eigen REQUIRED)
-
-
-#################################################
 # 	Perform all set commands                   	#
 #################################################
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 #set(CMAKE_BUILD_TYPE Debug)
 set(OpenCV_LIBS opencv_core opencv_imgproc opencv_highgui opencv_calib3d)
 #set(CMAKE_AUTOMOC ON)
@@ -24,6 +15,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -msse4.2 -funroll-loops")
 
+#################################################
+#	Find the necessary Pkgs 					#		
+#################################################
+find_package(catkin REQUIRED)
+find_package(catkin_simple REQUIRED)
+find_package(cmake_modules REQUIRED)
+find_package(PCL 1.7 REQUIRED)
+find_package(Eigen REQUIRED)
+find_package(Threads REQUIRED)
 
 #################################################
 # 	Include Directories 	                   	#
@@ -62,7 +62,8 @@ target_link_libraries(fastfusion_node
 										pcl_common
 										pcl_io
 										pcl_visualization
-										pcl_surface)
+										pcl_surface
+										${CMAKE_THREAD_LIBS_INIT})
 
 cs_install()
 cs_export()
