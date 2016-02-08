@@ -1984,6 +1984,7 @@ void updateWrapperInteger
 
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
+		std::cout << "nLeavesQueued: " << nLeavesQueued << std::endl;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
 			sidetype3 o = _leafPos[brickIdx];

@@ -1750,6 +1750,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 
 
 #ifndef SEPARATE_MESHCELL_STRUCTURE
+	//-- Not used
 	transformLoopSimPrecalculatedNeg_vis(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
 			depthdata,scaling,maxcamdistance,
@@ -1758,6 +1759,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			,_meshCells,_meshCellIndicesBranch,_meshCellIndicesLeaf,_leafParent,_boundary,_performIncrementalMeshing);
 
 #else
+	//-- This one is used
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
 			depthData, noiseData,scaling,maxcamdistance,
@@ -2882,6 +2884,7 @@ void FusionMipMapCPU::updateMeshCellStructure()
 	for(sidetype length=_brickLength;length<_n/2;length*=2) maxLevel++;
 	for(size_t i=0;i<_newBudsSinceMeshingToClear.subtreeBuds->size();i++){
 #if defined MESHCELLINDICES_SPLIT && defined MESHCELLINDICES_COMPACT
+		//-- Not used
 		fprintf(stderr,"\nUpdating Branch Indices from Debug Both for bud %i",(*_newBudsSinceMeshingToClear.subtreeBuds)[i]);
 		updateMeshCellStructureBranches_recursive_splitcompactdebug
 		(_meshCellsSplit,_meshCellIndicesBranch,_boundary,
@@ -2892,6 +2895,7 @@ void FusionMipMapCPU::updateMeshCellStructure()
 		fprintf(stderr,"\nBranch Indices from Debug Both for bud %i updated",(*_newBudsSinceMeshingToClear.subtreeBuds)[i]);
 #else
 #ifdef MESHCELLINDICES_SPLIT
+		//-- This one is used
 //		fprintf(stderr,"\nUpdating Branch Indices from Split for bud %i",(*_newBudsSinceMeshingToClear.subtreeBuds)[i]);
 		updateMeshCellStructureBranches_recursive
 		(_meshCellsSplit,_meshCellIndicesBranch,_meshCellIndicesLeaf,_boundary,_tree,
@@ -2902,6 +2906,7 @@ void FusionMipMapCPU::updateMeshCellStructure()
 #endif
 
 #ifdef MESHCELLINDICES_COMPACT
+		//-- Not used
 		fprintf(stderr,"\nUpdating Branch Indices from Compact for bud %i",(*_newBudsSinceMeshingToClear.subtreeBuds)[i]);
 		updateMeshCellStructureBranches_recursive_compact
 		(_meshCellsCompact,_meshCellIndicesBranchCompact,_meshCellIndicesLeaf,_boundaryCompact,_tree,

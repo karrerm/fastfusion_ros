@@ -21,7 +21,7 @@ depthConsistencyChecks : 0
 saveMesh : true
 fileLocation : /home/karrer/deskWithNoise
 # TF Id's
-world_id : /vicon
+world_id : /world
 cam_id : /depth
 
 # Define if using Time of flight sensor or not
