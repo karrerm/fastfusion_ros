@@ -1962,7 +1962,8 @@ void updateWrapperInteger
 		volumetype startLeaf,
 		std::vector<volumetype> * meshCellsUsed,
 		std::vector<double> * latestUpdateTime,
-		std::vector<volumetype> *outdatedMeshCells
+		std::vector<volumetype> *outdatedMeshCells,
+		bool * leafNumberIsOutdated
 )
 {
 	const ushort *depth = param.depth;
@@ -2007,9 +2008,6 @@ void updateWrapperInteger
   if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
-		//std::cout << "_nLeavesQueued: " << nLeavesQueued << std::endl;
-		std::cout << "Start Leaf Nr: " << _leafNumber[l1] << " "<< std::endl;
-		//std::cout << "OutdatedMeshCells: " << outdatedMeshCells->size() << ", meshCellsUsed: " << meshCellsUsed->size() << " " << std::endl;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
 			bool alreadySeen = false;
@@ -2021,7 +2019,7 @@ void updateWrapperInteger
 					(*latestUpdateTime)[i] = time;
 					//break;
 				}
-				if ((time - (*latestUpdateTime)[i]) > 5.0) {
+				if ((time - (*latestUpdateTime)[i]) > 2.0) {
 					//-- The Mesh Cell is outdated
 					outdatedMeshCells->push_back((*meshCellsUsed)[i]);
 					meshCellsUsed->erase(meshCellsUsed->begin() + i);
@@ -2060,6 +2058,7 @@ void updateWrapperInteger
 
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
+			if (!leafNumberIsOutdated[l]){
 		    if (depthNoise) {
 		    	//-- Depth Noise Data is available, use routine with adaptive weighting
 		    	update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
@@ -2073,6 +2072,10 @@ void updateWrapperInteger
 						scale,distanceThreshold,brickIdx,o,leafScale,
 						_distance,_weights,_color);
 		    }
+			} else {
+				//-- Delete Mesh element (by setting its weight to zero)
+				update8zeroWeight(brickIdx,_weights);
+			}
 #else
 #pragma message "Compiling without AVX2 support"
 		    if (depthNoise) {
