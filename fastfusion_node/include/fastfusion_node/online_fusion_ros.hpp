@@ -118,7 +118,7 @@ public:
 	// No Noise Data available
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
 	// With Noise Data
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time);
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
@@ -163,6 +163,7 @@ protected :
 	std::queue<cv::Mat> _queueDepth;
 	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
+	std::queue<double> _queueTime;
 	void fusionWrapperROS(void);
 	bool _isReady;
 	float3 _offset;

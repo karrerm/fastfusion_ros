@@ -283,6 +283,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 //--
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgDepth->header.stamp;
+	double time = timestamp.toSec();
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf, imgNoiseDist, imgNoise;
@@ -380,7 +381,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Fuse the imcoming Images into existing map
 	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose);
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time);
 	}
 }
 
