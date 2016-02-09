@@ -1050,7 +1050,7 @@ bool FusionMipMapCPU:: allocateMemoryCPU()
   _leafPos = new sidetype3[_nLeavesTotal];
   _leafScale = new sidetype[_nLeavesTotal];
 
-
+  _leafNumberIsOutdated = new bool[_nLeavesTotal];
   if(_loopClosureMode){
   	_leafMapLoop = new volumetype[_nLeavesTotal];
   	for(volumetype i=0;i<_nLeavesTotal;i++) _leafMapLoop[i] = BRANCHINIT;
@@ -1725,7 +1725,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells, &_latestUpdateTime, &_outdatedMeshCells);
+			_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells, &_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -1769,6 +1769,8 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->data(),
 			_newBudsSinceMeshingToQueue.leafBuds->data(),
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
+	queryOutdatedBricks(_nLeavesQueuedSurface,
+			_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells,_leafNumberIsOutdated);
 	eprintf("\n%i new Subtrees and %i new Leaves this Map",
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
 	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
@@ -1810,7 +1812,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
+				_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
 
 		time4 = (double)cv::getTickCount();
 
@@ -2145,7 +2147,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
+			_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -2198,6 +2200,8 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
 	eprintf("\n%i new Subtrees and %i new Leaves this Map",
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
+	queryOutdatedBricks(_nLeavesQueuedSurface,
+			_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells, _leafNumberIsOutdated);
 	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
 		_newBudsSinceMeshingToAccumulate.subtreeBuds->push_back((*_newBudsSinceMeshingToQueue.subtreeBuds)[i]);
 		_newBudsSinceMeshingToAccumulate.subtreeBudsParentLeaf->push_back((*_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf)[i]);
@@ -2250,7 +2254,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
+				_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells, _leafNumberIsOutdated);
 
 		time4 = (double)cv::getTickCount();
 
