@@ -201,7 +201,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 
 #define MAXCAMDISTANCE 4.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 0.5
+#define MIN_WEIGHT_FOR_SURFACE 8.0
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
