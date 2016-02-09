@@ -441,6 +441,10 @@ protected:
 			,volumetype &_numberOfQueuedSubtrees
 			,volumetype _treeSizeSinceMeshing);
 
+	friend void queryOutdatedBricks(volumetype &_nLeavesQueued,
+			volumetype *_leafNumber,volumetype *_queueIndexOfLeaf, std::vector<volumetype> *outdatedMeshCells,
+			bool * _leafNumberIsOutdated);
+
 	BudsAnchor _newBudsSinceMeshingToQueue;
 	BudsAnchor _newBudsSinceMeshingToAccumulate;
 	BudsAnchor _newBudsSinceMeshingToClear;
@@ -468,6 +472,7 @@ protected:
 	std::vector<volumetype> _usedMeshCells;
 	std::vector<double> _latestUpdateTime;
 	std::vector<volumetype> _outdatedMeshCells;
+	bool *_leafNumberIsOutdated;
 
 	MeshCellArray _meshCellsSplit;
 	MeshCellArray _meshCellsCompact;
