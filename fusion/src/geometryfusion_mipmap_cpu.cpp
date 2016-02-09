@@ -1601,7 +1601,7 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 }
 
 int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
-		const cv::Mat &rgb, float scaling, float maxcamdistance) {
+		const cv::Mat &rgb, float scaling, float maxcamdistance, double time) {
 //-- addMap: Function to add new depth information to the SDF-tree structure. This version also
 //-- takes depth noise information into account which is i.e. available from a ToF camera.
 //-- When no such information is available use overloaded function!
@@ -1725,7 +1725,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+			_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells, &_latestUpdateTime, &_outdatedMeshCells);
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -1810,7 +1810,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+				_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
 
 		time4 = (double)cv::getTickCount();
 
@@ -2145,7 +2145,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+			_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -2250,7 +2250,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+				_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells);
 
 		time4 = (double)cv::getTickCount();
 

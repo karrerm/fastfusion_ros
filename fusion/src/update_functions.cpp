@@ -1746,6 +1746,26 @@ void update8AddLoopAVXSingleInteger
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 8.02.2016
+void update8zeroWeight(volumetype &brickIdx, weighttype *_weights) {
+//-- Set the weights to zero (outdated Brick)
+	volumetype threadOffset = brickIdx*512;
+	for(int z = 0; z < 8; z++){
+		for(int y = 0; y < 8; y++){
+			volumetype idx = threadOffset; threadOffset+=8;
+			__m256 wAcc = _mm256_load_ps(_weights+idx);
+			wAcc = _mm256_setzero_ps();
+			_mm256_store_ps(_weights+idx,wAcc);
+		}
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 
@@ -1816,6 +1836,7 @@ typedef struct SDFUpdateParameterInteger_ {
 	volumetype *_leafNumber; sidetype3 *_leafPos; sidetype *_leafScale;
 	float *_distance; weighttype *_weights; colortype3 *_color;
 	sidetype brickLength;
+	double time;
 	SDFUpdateParameterInteger_(
 			const ushort *depth, const float *depthNoise, float scaling, float maxcamdistance,
 			const uchar *rgb,
@@ -1827,7 +1848,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			float scale, float distanceThreshold,
 			volumetype *_leafNumber, sidetype3 *_leafPos, sidetype *_leafScale,
 			float *_distance, weighttype *_weights, colortype3 *_color,
-			sidetype brickLength):
+			sidetype brickLength, double time):
 			depth(depth), depthNoise(depthNoise),scaling(scaling), maxcamdistance(maxcamdistance), rgb(rgb),
 			imageWidth(imageWidth), imageHeight(imageHeight),
 			m11(m11), m12(m12), m13(m13), m14(m14),
@@ -1837,7 +1858,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			scale(scale), distanceThreshold(distanceThreshold),
 			_leafNumber(_leafNumber), _leafPos(_leafPos), _leafScale(_leafScale),
 			_distance(_distance), _weights(_weights), _color(_color),
-			brickLength(brickLength)
+			brickLength(brickLength), time(time)
 			{}
 } SDFUpdateParameterInteger;
 
@@ -1938,7 +1959,10 @@ void updateWrapperInteger
 		SDFUpdateParameterInteger param,
 		volatile volumetype * _nLeavesQueued,
 		volatile bool *_threadValid,
-		volumetype startLeaf
+		volumetype startLeaf,
+		std::vector<volumetype> * meshCellsUsed,
+		std::vector<double> * latestUpdateTime,
+		std::vector<volumetype> *outdatedMeshCells
 )
 {
 	const ushort *depth = param.depth;
@@ -1972,21 +1996,42 @@ void updateWrapperInteger
 	float *_distance = param._distance;
 	weighttype *_weights = param._weights;
 	colortype3 *_color = param._color;
+	double time = param.time;
 //	sidetype _brickLength = param.brickLength;
 
 //	volumetype brickSize = _brickLength*_brickLength*_brickLength;
 
 	volumetype l1 = startLeaf;
 
-
   unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
   if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
-
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
-		std::cout << "nLeavesQueued: " << nLeavesQueued << std::endl;
+		//std::cout << "_nLeavesQueued: " << nLeavesQueued << std::endl;
+		std::cout << "Start Leaf Nr: " << _leafNumber[l1] << " "<< std::endl;
+		//std::cout << "OutdatedMeshCells: " << outdatedMeshCells->size() << ", meshCellsUsed: " << meshCellsUsed->size() << " " << std::endl;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
+			bool alreadySeen = false;
+			//-- Loop to check for outdated meshCells
+			for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
+				if ((*meshCellsUsed)[i] == brickIdx) {
+					//-- MeshCell was allready seen --> update latest time
+					alreadySeen = true;
+					(*latestUpdateTime)[i] = time;
+					//break;
+				}
+				if ((time - (*latestUpdateTime)[i]) > 5.0) {
+					//-- The Mesh Cell is outdated
+					outdatedMeshCells->push_back((*meshCellsUsed)[i]);
+					meshCellsUsed->erase(meshCellsUsed->begin() + i);
+					latestUpdateTime->erase(latestUpdateTime->begin() + i);
+				}
+			}
+			if (alreadySeen == false) {
+				meshCellsUsed->push_back(brickIdx);
+				latestUpdateTime->push_back(time);
+			}
 			sidetype3 o = _leafPos[brickIdx];
 			sidetype leafScale = _leafScale[brickIdx];
 

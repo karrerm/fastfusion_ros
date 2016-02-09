@@ -132,7 +132,7 @@ public:
 			float scaling, float maxcamdistance);
 	//-- Adding single image with depth noise information
 	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
-			const cv::Mat &rgb, float scaling, float maxcamdistance);
+			const cv::Mat &rgb, float scaling, float maxcamdistance, double time);
 	//Adding multiple images up to the next keyframe
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<std::vector<cv::Mat> > rgbImages = std::vector<std::vector<cv::Mat> >(),
@@ -463,6 +463,11 @@ protected:
 	std::list<size_t> _meshCellQueueOld;
 	std::list<size_t> _meshCellQueueCurrent;
 	std::list<size_t> _meshCellQueueNext;
+
+	//-- Testing tracking used meshcells
+	std::vector<volumetype> _usedMeshCells;
+	std::vector<double> _latestUpdateTime;
+	std::vector<volumetype> _outdatedMeshCells;
 
 	MeshCellArray _meshCellsSplit;
 	MeshCellArray _meshCellsCompact;
