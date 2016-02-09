@@ -2019,7 +2019,7 @@ void updateWrapperInteger
 					(*latestUpdateTime)[i] = time;
 					//break;
 				}
-				if ((time - (*latestUpdateTime)[i]) > 2.0) {
+				if ((time - (*latestUpdateTime)[i]) > 8.0) {
 					//-- The Mesh Cell is outdated
 					outdatedMeshCells->push_back((*meshCellsUsed)[i]);
 					meshCellsUsed->erase(meshCellsUsed->begin() + i);

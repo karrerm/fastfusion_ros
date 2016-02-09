@@ -57,7 +57,7 @@ _currentMeshInterleaved(NULL),
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
 	//-- Create Visualization Thread
-	//_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
+	_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
 }
 
 OnlineFusionROS::~OnlineFusionROS()
@@ -261,9 +261,11 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				queueDepth.pop();
 				currPose = queuePose.front();
 				queuePose.pop();
+				currTime = queueTime.front();
+				queueTime.pop();
 				//updateLock.unlock();
 				//-- Add Map and perform update
-				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance);
+				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance,currTime);
 				_newMesh = _fusion->updateMeshes();
 			}
 		}
@@ -582,7 +584,7 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 }
 
 
-void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose) {
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time) {
 //-- Adapted version of the updateSlot()-function in order to process the current images.
 	if (!_threadFusion) {
 	//-- Unthreaded Fusion
@@ -595,7 +597,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		{
 		std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
-		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance);
+		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance,time);
 		_fusion->updateMeshes();
 		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
 		if(_pointermeshes[0]) delete _pointermeshes[0];
@@ -628,6 +630,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		_queueRGB.push(rgbImg);
 		_queueDepth.push(depthImg);
 		_queuePose.push(pose);
+		_queueTime.push(time);
 		_newDataInQueue = true;
 		_fusionThreadCondition.notify_one();
 		}

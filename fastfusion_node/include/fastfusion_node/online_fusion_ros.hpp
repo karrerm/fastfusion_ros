@@ -116,7 +116,7 @@ public:
 	bool _threadMeshing;
 //-- Update Fusion
 	// No Noise Data available
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time);
 	// With Noise Data
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time);
 

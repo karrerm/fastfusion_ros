@@ -129,7 +129,7 @@ public:
 	int addMap(cv::Mat &depth, CameraInfo caminfo,
 			std::vector<cv::Mat> rgb = std::vector<cv::Mat>(3));
 	int addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
-			float scaling, float maxcamdistance);
+			float scaling, float maxcamdistance, double time);
 	//-- Adding single image with depth noise information
 	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
 			const cv::Mat &rgb, float scaling, float maxcamdistance, double time);

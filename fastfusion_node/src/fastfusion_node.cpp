@@ -395,6 +395,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 //-- No Depth noise data is available
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgDepth->header.stamp;
+	double time = timestamp.toSec();
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf;
@@ -443,7 +444,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time);
 	}
 }
 
@@ -522,6 +523,7 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	ros::Time timestamp = pcl_msg.header.stamp;
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
+	double time = timestamp.toSec();
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -540,7 +542,7 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time);
 }
 
 
@@ -568,6 +570,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	ros::Time timestamp = msgRGB->header.stamp;
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
+	double time = timestamp.toSec();
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -585,7 +588,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose);
+	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time);
 }
 
 

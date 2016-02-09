@@ -1950,7 +1950,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 }
 
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
-		float scaling, float maxcamdistance)
+		float scaling, float maxcamdistance, double time)
 {
 	//fprintf(stderr,"\nI[%i]",_framesAdded);
 	//Parameter Helpers
@@ -2147,7 +2147,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
+			_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -2254,7 +2254,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength,0.0),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells, _leafNumberIsOutdated);
+				_distance,_weights,_color,_brickLength,time),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells, _leafNumberIsOutdated);
 
 		time4 = (double)cv::getTickCount();
 
