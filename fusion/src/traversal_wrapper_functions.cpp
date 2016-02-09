@@ -702,3 +702,18 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 		}
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 9.02.2016
+inline void queryOutdatedBricks(volumetype &_nLeavesQueued,
+		volumetype *_leafNumber,volumetype *_queueIndexOfLeaf, std::vector<volumetype> *outdatedMeshCells, bool *_leafNumberIsOutdated) {
+	for (int i = 0; i < outdatedMeshCells->size(); i++) {
+		//std::cout << "take out elements" << std::endl;
+		_queueIndexOfLeaf[(*outdatedMeshCells)[i]] = _nLeavesQueued;
+		_leafNumber[_nLeavesQueued] = (*outdatedMeshCells)[i];
+		_leafNumberIsOutdated[_nLeavesQueued] = true;
+		_nLeavesQueued++;
+	}
+	outdatedMeshCells->clear();
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
