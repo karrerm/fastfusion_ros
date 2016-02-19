@@ -19,6 +19,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
+#include <nav_msgs/Odometry.h>
+#include <Eigen/SVD>
 #include "fastfusion_node/online_fusion_ros.hpp"
 
 #include <message_filters/subscriber.h>
@@ -36,15 +38,21 @@ public:
 protected:
 	//-- Image Message Callback
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
+	void imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
+			const sensor_msgs::ImageConstPtr& msgNoise, const nav_msgs::Odometry::ConstPtr& msgOdom);
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
-			const sensor_msgs::ImageConstPtr& msgNoise);
+				const sensor_msgs::ImageConstPtr& msgNoise);
+	void imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
+			const nav_msgs::Odometry::ConstPtr& msgOdom);
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
 	void getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *dephtImg);
 	void getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgNoise, cv::Mat *noiseImg);
-	void registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg);
+	void registerPointCloudCallbackSLAM(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg,
+			const nav_msgs::Odometry::ConstPtr& msgOdom);
+	void registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg);
 	void depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected);
 
 	//-- Color encoding
@@ -67,9 +75,15 @@ protected:
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberNoise_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
+	message_filters::Subscriber<nav_msgs::Odometry> *subscriberOdometry_;
+	message_filters::Subscriber<sensor_msgs::PointCloud2> *subscriberPointCloud_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,
-			sensor_msgs::Image> > *syncNoise_;
+			sensor_msgs::Image, nav_msgs::Odometry> > *syncNoiseSLAM_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,
+				sensor_msgs::Image> > *syncNoise_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image,sensor_msgs::Image, nav_msgs::Odometry> > *syncSLAM_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image,sensor_msgs::Image> > *sync_;
+	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, nav_msgs::Odometry> > *syncPointCloudSLAM_;
 	void broadcastTFchain(ros::Time timestamp);
 	tf::TransformBroadcaster tfBroadcaster_;
 	tf::Transform tf_cam0_imu;
@@ -87,6 +101,12 @@ protected:
 	bool testing_point_cloud_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrameTrans_;
+
+	//-- Running estimate for decay time
+	bool useSlam_;
+	double *latestDerivativeSingularVals_;
+	double lastSingularVal_;
+	int singValCounter_;
 };
 
 

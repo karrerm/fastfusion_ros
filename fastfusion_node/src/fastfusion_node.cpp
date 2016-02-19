@@ -102,10 +102,14 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		t_rgb_cam0(0) = (double) T_rgb_cam0[0][3];
 		t_rgb_cam0(1) = (double) T_rgb_cam0[1][3];
 		t_rgb_cam0(2) = (double) T_rgb_cam0[2][3];
-		t_rgb_cam0 = t_rgb_cam0;
+		t_rgb_cam0 = -R_rgb_cam0.transpose()*t_rgb_cam0;
 		tf_rgb_cam0.setOrigin(tf::Vector3(t_rgb_cam0(0), t_rgb_cam0(1), t_rgb_cam0(2)));
-		Eigen::Quaterniond q_rgb_cam0(R_rgb_cam0);
+		Eigen::Quaterniond q_rgb_cam0(R_rgb_cam0.transpose());
 		tf_rgb_cam0.setRotation(tf::Quaternion(q_rgb_cam0.x(), q_rgb_cam0.y(), q_rgb_cam0.z(), q_rgb_cam0.w()));
+		XmlRpc::XmlRpcValue depthCorrection;
+		loadSuccess &= nodeLocal_.getParam("depth/depth_correction", depthCorrection);
+		depthCorrection_.at<double>(0,0) = (double)depthCorrection[0];
+		depthCorrection_.at<double>(1,0) = (double)depthCorrection[1];
 	}
 	//-- Read vicon body to camera transformation
 	XmlRpc::XmlRpcValue T_body_cam;
@@ -145,6 +149,9 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	distCoeff_.at<double>(2,0) = (double)distortion_depth[2];
 	distCoeff_.at<double>(3,0) = (double)distortion_depth[3];
 	distCoeff_.at<double>(4,0) = (double)distortion_depth[4];
+	//-- Use SLAM or VICON Poses?
+	loadSuccess &= nodeLocal_.getParam("use_slam", useSlam_);
+
 	//-- Read depth camera intrinsics
 	if (!use_pmd_) {
 		XmlRpc::XmlRpcValue intrinsics_rgb, distortion_rgb;
@@ -161,6 +168,8 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		distCoeffRGB_.at<double>(3,0) = (double)distortion_rgb[3];
 		distCoeffRGB_.at<double>(4,0) = (double)distortion_rgb[4];
 	}
+	latestDerivativeSingularVals_ = new double [10];
+	singValCounter_ = 0;
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		//-- Configure fastfusion framework
@@ -172,7 +181,6 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	while (!onlinefusion_.isSetup()){
 		//-- Waiting for onlinefusion to be setup
 	}
-	//cv::waitKey(10000);
 	testing_point_cloud_ = false;
 }
 
@@ -183,22 +191,54 @@ void FastFusionWrapper::run() {
 		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberConfidence_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberNoise_ = new message_filters::Subscriber<sensor_msgs::Image>;
-		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),5);
-		subscriberConfidence_->subscribe(node_,node_.resolveName("image_conf"),5);
+		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),15);
+		subscriberConfidence_->subscribe(node_,node_.resolveName("image_conf"),15);
+
 		if (depth_noise_) {
-			subscriberNoise_->subscribe(node_,node_.resolveName("image_noise"),5);
-			syncNoise_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> >
-				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image>(5),
-				*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_);
-			syncNoise_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));
+			subscriberNoise_->subscribe(node_,node_.resolveName("image_noise"),15);
+			if (useSlam_) {
+				subscriberOdometry_ = new message_filters::Subscriber<nav_msgs::Odometry>;
+				subscriberOdometry_->subscribe(node_,node_.resolveName("rovio_odometry"),15);
+				syncNoiseSLAM_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image, nav_msgs::Odometry> >
+				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image, nav_msgs::Odometry>(15),
+						*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_, *subscriberOdometry_);
+				syncNoiseSLAM_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPicoSLAM, this,  _1,  _2, _3, _4));
+
+			} else {
+				syncNoise_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> >
+				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image>(15),
+						*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_);
+				syncNoise_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));
+			}
+
 		} else {
-			sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
-			 	 (message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),
-			 			*subscriberDepth_,*subscriberConfidence_);
-			sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2));
+			if (useSlam_) {
+				syncSLAM_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, nav_msgs::Odometry> >
+				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, nav_msgs::Odometry>(15),
+						*subscriberDepth_,*subscriberConfidence_, *subscriberOdometry_);
+				syncSLAM_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPicoSLAM, this,  _1,  _2, _3));
+			} else {
+				sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
+				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(15),
+						*subscriberDepth_,*subscriberConfidence_);
+				sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2));
+			}
 		}
 	} else {
 		//-- Synchronize the image messages received from Realsense Sensor
+		subscriberPointCloud_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>;
+		if (useSlam_) {
+			subscriberOdometry_ = new message_filters::Subscriber<nav_msgs::Odometry>;
+			subscriberPointCloud_->subscribe(node_, node_.resolveName("point_cloud"),15);
+			subscriberOdometry_->subscribe(node_,node_.resolveName("rovio_odometry"),15);
+			syncPointCloudSLAM_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::PointCloud2, nav_msgs::Odometry> >
+				(message_filters::sync_policies::ApproximateTime <sensor_msgs::PointCloud2, nav_msgs::Odometry>(15),
+						*subscriberPointCloud_, *subscriberOdometry_);
+			syncPointCloudSLAM_->registerCallback(boost::bind(&FastFusionWrapper::registerPointCloudCallbackSLAM,this,_1,_2));
+		} else {
+			subscriberPointCloud_->subscribe(node_, node_.resolveName("point_cloud"),15);
+			subscriberPointCloud_->registerCallback(&FastFusionWrapper::registerPointCloudCallback,this);
+		}
 		/*
 		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberRGB_ = new message_filters::Subscriber<sensor_msgs::Image>;
@@ -212,10 +252,10 @@ void FastFusionWrapper::run() {
 		*/
 	}
 frameCounter_ = 0;
-	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
+	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
 	ros::Duration(3.0).sleep();
 	std::cout << "Start Spinning" << std::endl;
-	ros::Rate r(20);
+	ros::Rate r(50);
 	bool halted = true;
 	while (ros::ok()) {
 		bool loadSuccess = node_.getParam("runMapping", runMapping_);
@@ -240,7 +280,6 @@ frameCounter_ = 0;
 	if (!halted){
 		onlinefusion_.stop();
 	}
-	//pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloudFrameTrans_, false);
 	ros::shutdown();
 }
 
@@ -272,9 +311,10 @@ void FastFusionWrapper::jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, 
 
 }
 
-void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
+void FastFusionWrapper::imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf,
-										  const sensor_msgs::ImageConstPtr& msgNoise) {
+										  const sensor_msgs::ImageConstPtr& msgNoise,
+										  const nav_msgs::Odometry::ConstPtr& msgOdom) {
 	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 		return;
 	}
@@ -300,7 +340,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	cv::Mat mask;
 	imgConf.copyTo(mask,bin);
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
-	depthImageCorrection(imgDepthDist, &imgDepthCorr);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
 			if (mask.at<unsigned char>(v,u)!= 255) {
@@ -322,12 +362,14 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 				timestamp, ros::Duration(2.0));
 		tfListener.lookupTransform(world_id_, cam_id_,
 				timestamp, transform);
+		std::cout << "time waiting for tf: " << (ros::Time::now() - nowTime).toSec()*1000.0<< "ms " << std::endl;
 	}
 	catch (tf::TransformException ex){
 		ROS_ERROR("%s",ex.what());
 		ros::Duration(1.0).sleep();
 		return;
 	}
+
 	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
@@ -381,12 +423,84 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Fuse the imcoming Images into existing map
 	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time);
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, 3.0);
 	}
 }
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
-										  const sensor_msgs::ImageConstPtr& msgConf) {
+										  const sensor_msgs::ImageConstPtr& msgConf,
+										  const sensor_msgs::ImageConstPtr& msgNoise) {
+	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
+		return;
+	}
+//-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
+//-- The depth image is undistorted according to the intrinsics of the depth camera.
+//--
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	double time = timestamp.toSec();
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
+	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf, imgNoiseDist, imgNoise;
+	ros::Time timeMeas;
+	//-- Convert the incomming messages
+	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
+	getConfImageFromRosMsg(msgConf, &imgConfDist);
+	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
+	//-- Undistort the depth image
+	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
+	cv::undistort(imgNoiseDist, imgNoise, intrinsic_, distCoeff_);
+	cv::Mat bin = imgConf == 255;
+	cv::Mat mask;
+	imgConf.copyTo(mask,bin);
+	cv::imwrite("/home/karrer/PartialMeshes/normalConf.png",imgConf);
+	cv::imwrite("/home/karrer/PartialMeshes/maskedConf.png",mask);
+	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
+	for (int u = 0; u < imgDepthCorr.cols; u++) {
+		for (int v = 0; v < imgDepthCorr.rows; v++) {
+			if (mask.at<unsigned char>(v,u)!= 255 || imgDepthCorr.at<unsigned short>(v,u) <= 500) {
+				imgDepthCorr.at<unsigned short>(v,u) = 65000;
+				imgNoise.at<float>(v,u) = 0.0f;
+			}
+		}
+	}
+	cv::imwrite("/home/karrer/PartialMeshes/editDepth.png",imgDepthCorr);
+	//imgDepth = imgDepthDist;
+	// Create Dummy RGB Frame
+	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
+
+	jetColorNoise(imgNoise,&imgRGB,0.005,0.05);
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_, cam_id_,
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+	}
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+
+	//-- Fuse the imcoming Images into existing map
+	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
+	if (runMapping_) {
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, 3.0);
+	}
+}
+
+void FastFusionWrapper::imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& msgDepth,
+										  const sensor_msgs::ImageConstPtr& msgConf,
+										  const nav_msgs::Odometry::ConstPtr& msgOdom) {
+	double dt = (double)(msgDepth->header.stamp - previous_ts_).toSec();
 	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 		return;
 	}
@@ -410,13 +524,53 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	cv::Mat mask;
 	imgConf.copyTo(mask,bin);
 	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
-	depthImageCorrection(imgDepthDist, &imgDepthCorr);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
 	for (int u = 0; u < imgDepthCorr.cols; u++) {
 		for (int v = 0; v < imgDepthCorr.rows; v++) {
 			if (mask.at<unsigned char>(v,u)!= 255) {
 				imgDepthCorr.at<unsigned short>(v,u) = 65000;
 			}
 		}
+	}
+
+	//-- Extract Covariance from Odometry Message
+	Eigen::MatrixXd covarianceMat(6,6);
+	for (int i = 0;i < 6; i++) {
+		for (int k = 0; k < 6; k++) {
+			int ind = k*6 + i;
+			covarianceMat(k,i) = msgOdom->pose.covariance[ind];
+		}
+	}
+
+	//-- Compute the singular values of the covariance matrix
+	Eigen::JacobiSVD<Eigen::MatrixXd> svd(covarianceMat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+	Eigen::VectorXd singVals = svd.singularValues();
+	double maxSingularValue = singVals(0);
+	if (singValCounter_ < 10 && singValCounter_ >=1) {
+		latestDerivativeSingularVals_[singValCounter_] = std::abs((maxSingularValue - lastSingularVal_) / dt);
+		singValCounter_++;
+	} else if (singValCounter_ == 1) {
+		latestDerivativeSingularVals_[singValCounter_] = 0.0;
+	} else {
+		double temp [9];
+		for (int i = 0; i < 9; i++) {
+			temp[i] = latestDerivativeSingularVals_[i+1];
+		}
+		for (int i = 0; i < 9; i++) {
+			latestDerivativeSingularVals_[i] = temp[i];
+		}
+		latestDerivativeSingularVals_[9] = std::abs((maxSingularValue - lastSingularVal_) / dt);
+	}
+	lastSingularVal_ = maxSingularValue;
+	double avgDerSingVal = 0;
+	for (int i = 0; i < 10; i++ ){
+		avgDerSingVal += 0.1*latestDerivativeSingularVals_[i];
+	}
+	double timeDecay = 0.0;
+	if (avgDerSingVal == 0) {
+		timeDecay = 10.0;
+	} else {
+		timeDecay = 1.0/avgDerSingVal * 0.5/5.0;
 	}
 	//imgDepth = imgDepthDist;
 	// Create Dummy RGB Frame
@@ -444,11 +598,82 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time);
+		if (useSlam_) {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0);
+		} else {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0);
+		}
 	}
 }
 
+void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
+										  const sensor_msgs::ImageConstPtr& msgConf) {
+	double dt = (double)(msgDepth->header.stamp - previous_ts_).toSec();
+	if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
+		return;
+	}
+//-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
+//-- The depth image is undistorted according to the intrinsics of the depth camera.
+//-- No Depth noise data is available
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = msgDepth->header.stamp;
+	double time = timestamp.toSec();
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
+	cv::Mat imgDepthDist, imgDepth, imgConfDist, imgConf;
+	ros::Time timeMeas;
+	//-- Convert the incomming messages
+	getDepthImageFromRosMsg(msgDepth, &imgDepthDist);
+	getConfImageFromRosMsg(msgConf, &imgConfDist);
+	//-- Undistort the depth image
+	cv::undistort(imgDepthDist, imgDepth, intrinsic_, distCoeff_);
+	cv::undistort(imgConfDist, imgConf, intrinsic_, distCoeff_);
+	cv::Mat bin = (imgConf == 255);
+	cv::Mat mask;
+	imgConf.copyTo(mask,bin);
+	cv::Mat imgDepthCorr = cv::Mat::zeros(imgDepth.rows,imgDepth.cols,cv::DataType<unsigned short>::type);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
+	for (int u = 0; u < imgDepthCorr.cols; u++) {
+		for (int v = 0; v < imgDepthCorr.rows; v++) {
+			if (mask.at<unsigned char>(v,u)!= 255 || imgDepthCorr.at<unsigned short>(v,u) <= 500) {
+				imgDepthCorr.at<unsigned short>(v,u) = 65000;
+			}
+		}
+	}
 
+	//imgDepth = imgDepthDist;
+	// Create Dummy RGB Frame
+	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
+
+
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_, cam_id_,
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+	}
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+
+
+	//-- Fuse the imcoming Images into existing map
+	if (runMapping_) {
+		if (useSlam_) {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0);
+		} else {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0);
+		}
+	}
+}
 
 
 
@@ -488,15 +713,16 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 }
 
 
-void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2 pcl_msg) {
-	if (((pcl_msg.header.stamp - previous_ts_).toSec() <= 0.05) && runMapping_){
+void FastFusionWrapper::registerPointCloudCallbackSLAM(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg, const nav_msgs::Odometry::ConstPtr& msgOdom) {
+//-- Callback for colored point cloud when use it with odometry messages
+	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.05) && !runMapping_){
 			return;
 	}
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
-	pcl::fromROSMsg (pcl_msg,pcl_cloud);
+	pcl::fromROSMsg (*pcl_msg,pcl_cloud);
 	//-- Create RGB and Depth image from point cloud
-	unsigned int width = pcl_msg.width;
-	unsigned int height = pcl_msg.height;
+	unsigned int width = pcl_msg->width;
+	unsigned int height = pcl_msg->height;
 	cv::Mat imgDepth(height,width,CV_16UC1);
 	cv::Mat imgRGB(height, width,CV_8UC3);
 	unsigned int indexRGB = 0;
@@ -520,7 +746,7 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	//cv::imshow("RegCallback", imgDepth);
 	//cv::waitKey(5);
 	//-- Get time stamp of the incoming images
-	ros::Time timestamp = pcl_msg.header.stamp;
+	ros::Time timestamp = pcl_msg->header.stamp;
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	double time = timestamp.toSec();
@@ -528,9 +754,77 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	tf::StampedTransform transform;
 	try{
 		ros::Time nowTime = ros::Time::now();
-		tfListener.waitForTransform(world_id_,cam_id_,
+		tfListener.waitForTransform(world_id_,"camera_depth_optical_frame",
 				timestamp, ros::Duration(2.0));
-		tfListener.lookupTransform(world_id_, cam_id_,
+		tfListener.lookupTransform(world_id_, "camera_depth_optical_frame",
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+	}
+	cv::Mat imgDepthCorr(height,width,CV_16UC1);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+	//-- Fuse the imcoming Images into existing map
+	if (runMapping_) {
+		if (useSlam_) {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0);
+		} else {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 10.0);
+		}
+	}
+}
+
+void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg) {
+//-- Callback for colored point cloud when use it without odometry messages
+	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.05) && !runMapping_){
+			return;
+	}
+	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
+	pcl::fromROSMsg (*pcl_msg,pcl_cloud);
+	//-- Create RGB and Depth image from point cloud
+	unsigned int width = pcl_msg->width;
+	unsigned int height = pcl_msg->height;
+	cv::Mat imgDepth(height,width,CV_16UC1);
+	cv::Mat imgRGB(height, width,CV_8UC3);
+	unsigned int indexRGB = 0;
+	unsigned int indexDepth = 0;
+	for (unsigned int v = 0; v < height; v++) {
+		for (unsigned int u = 0; u < width; u++) {
+			indexRGB = 3*(width*v + u);
+			indexDepth = width*v + u;
+			imgRGB.data[indexRGB + 0] = pcl_cloud.points[indexDepth].b;
+			imgRGB.data[indexRGB + 1] = pcl_cloud.points[indexDepth].g;
+			imgRGB.data[indexRGB + 2] = pcl_cloud.points[indexDepth].r;
+			if (pcl_cloud.points[indexDepth].z > 0) {
+				imgDepth.at<unsigned short>(v,u) = (unsigned short)(pcl_cloud.points[indexDepth].z*1000.0f);
+				//imgDepth.data[indexDepth] = (float)(pcl_cloud.points[indexDepth].z);
+			} else {
+				imgDepth.at<unsigned short>(v,u) = (unsigned short)0.0;
+			}
+		}
+	}
+	cv::Mat imgDepthCorr(height,width,CV_16UC1);
+	depthImageCorrection(imgDepth, &imgDepthCorr);
+	//cv::imwrite("/home/karrer/Desktop/depht.png",imgDepth);
+	//cv::imshow("RegCallback", imgDepth);
+	//cv::waitKey(5);
+	//-- Get time stamp of the incoming images
+	ros::Time timestamp = pcl_msg->header.stamp;
+	broadcastTFchain(timestamp);
+	previous_ts_ = timestamp;
+	double time = timestamp.toSec();
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_,"camera_depth_optical_frame",
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, "camera_depth_optical_frame",
 				timestamp, transform);
 	}
 	catch (tf::TransformException ex){
@@ -542,8 +836,15 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time);
+	if (runMapping_) {
+		if (useSlam_) {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0);
+		} else {
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, -1.0);
+		}
+	}
 }
+
 
 
 void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
@@ -588,7 +889,13 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
 	//-- Fuse the imcoming Images into existing map
-	onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time);
+	if (runMapping_){
+		if (useSlam_) {
+			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 5.0);
+		} else {
+			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 10.0);
+		}
+	}
 }
 
 
@@ -634,11 +941,22 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "camera", cam_id_));
+		if (useSlam_) {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
+		} else {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
+		}
 	} else {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
+		if (useSlam_) {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "camera0", cam_id_));
+		} else {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
+		}
 	}
-	tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
+	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
 	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "imu", "cam0"));
 
 }

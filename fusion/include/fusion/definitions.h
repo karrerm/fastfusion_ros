@@ -199,9 +199,9 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define SWITCH_MESHCELLS_SPLIT
 #endif
 
-#define MAXCAMDISTANCE 4.0
+#define MAXCAMDISTANCE 3.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0  // This is default
-#define MIN_WEIGHT_FOR_SURFACE 8.0
+#define MIN_WEIGHT_FOR_SURFACE 6.0
 #define ADD_WEIGHTS_TRANSITION_140424
 //#define MAXCAMDISTANCE 6.0
 //#define MIN_WEIGHT_FOR_SURFACE 0.0
@@ -217,8 +217,8 @@ typedef struct int3_ { int x; int y; int z;} int3;
 #define REFERENCE_DEPTH 1.0f
 //#define SCALE_VARIANCE
 //#define SCALE_DEVIATION
-#define SCALE_LINEAR
-//#define SCALE_CONSTANT
+//#define SCALE_LINEAR
+#define SCALE_CONSTANT
 
 //#define DISTANCE_POINT_FAST
 #define DISTANCE_POINT_TRUE
@@ -256,13 +256,13 @@ typedef struct int3_ { int x; int y; int z;} int3;
 //#define WEIGHT_GAUSS
 //#define WEIGHT_GAUSS_NARROW
 //#define DISTANCEWEIGHTSIGMA 0.05f // this is default
-#define DISTANCEWEIGHTSIGMA 0.02f
+#define DISTANCEWEIGHTSIGMA 0.05f
 
-#define DISTANCEWEIGHTEPSILON 0.005f
+#define DISTANCEWEIGHTEPSILON 0.008f
 //#define DISTANCEMINEXPWEIGHT  0.000001f // this is default
 #define DISTANCEMINEXPWEIGHT  0.005f
 
-#define WEIGHT_FACTOR 2.0f
+#define WEIGHT_FACTOR 3.0f
 
 //float cutoff = expf(-distanceWeightSigma*(threshold-distanceWeightEpsilon)*(threshold-distanceWeightEpsilon));
 //return (float)(distance<distanceWeightEpsilon) +

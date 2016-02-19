@@ -1328,6 +1328,15 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+6].z),
 					(float)(_color[idx+7].z)};
 
+			ALIGNED float dummy8[8] = {
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f),
+					(float)(0.0f)};
 			// float dInc = length - length/pxz*h;
 			__m256 h8AVX = _mm256_mul_ps(_mm256_set1_ps(scaling),_mm256_load_ps(h8));
 			__m256 dInc = _mm256_sub_ps(length,_mm256_mul_ps(_mm256_mul_ps(length,reciprocal),h8AVX));
@@ -1413,7 +1422,7 @@ void update8AddLoopAVXSingleInteger
 			_mm256_store_ps(gAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(gAcc,wAcc),_mm256_mul_ps(gInc,wInc)),factor),col_max));
 			_mm256_store_ps(bAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(bAcc,wAcc),_mm256_mul_ps(bInc,wInc)),factor),col_max));
 
-
+_mm256_store_ps(dummy8, _mm256_mul_ps(wNew,_mm256_set1_ps(256.0f)));
 			_color[idx+0].x = rAcc8[0];
 			_color[idx+1].x = rAcc8[1];
 			_color[idx+2].x = rAcc8[2];
@@ -1599,6 +1608,15 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+6].z),
 					(float)(_color[idx+7].z)};
 
+			ALIGNED float dummy8[8] = {
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f),
+								(float)(0.0f)};
 
 			// float dInc = length - length/pxz*h;
 			__m256 h8AVX = _mm256_mul_ps(_mm256_set1_ps(scaling),_mm256_load_ps(h8));
@@ -1680,7 +1698,6 @@ void update8AddLoopAVXSingleInteger
 					_mm256_mul_ps(
 							_mm256_mul_ps(
 									wInc1, _mm256_rcp_ps(noise8bounded)), _mm256_set1_ps(MIN_NOISE_LEVEL));
-
 //			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
 
@@ -1713,7 +1730,7 @@ void update8AddLoopAVXSingleInteger
 			_mm256_store_ps(gAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(gAcc,wAcc),_mm256_mul_ps(gInc,wInc)),factor),col_max));
 			_mm256_store_ps(bAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(bAcc,wAcc),_mm256_mul_ps(bInc,wInc)),factor),col_max));
 
-
+_mm256_store_ps(dummy8, _mm256_mul_ps(wNew,_mm256_set1_ps(256.0f)));
 			_color[idx+0].x = rAcc8[0];
 			_color[idx+1].x = rAcc8[1];
 			_color[idx+2].x = rAcc8[2];
@@ -1836,7 +1853,7 @@ typedef struct SDFUpdateParameterInteger_ {
 	volumetype *_leafNumber; sidetype3 *_leafPos; sidetype *_leafScale;
 	float *_distance; weighttype *_weights; colortype3 *_color;
 	sidetype brickLength;
-	double time;
+	double time; double decayTime;
 	SDFUpdateParameterInteger_(
 			const ushort *depth, const float *depthNoise, float scaling, float maxcamdistance,
 			const uchar *rgb,
@@ -1848,7 +1865,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			float scale, float distanceThreshold,
 			volumetype *_leafNumber, sidetype3 *_leafPos, sidetype *_leafScale,
 			float *_distance, weighttype *_weights, colortype3 *_color,
-			sidetype brickLength, double time):
+			sidetype brickLength, double time, double decayTime):
 			depth(depth), depthNoise(depthNoise),scaling(scaling), maxcamdistance(maxcamdistance), rgb(rgb),
 			imageWidth(imageWidth), imageHeight(imageHeight),
 			m11(m11), m12(m12), m13(m13), m14(m14),
@@ -1858,7 +1875,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			scale(scale), distanceThreshold(distanceThreshold),
 			_leafNumber(_leafNumber), _leafPos(_leafPos), _leafScale(_leafScale),
 			_distance(_distance), _weights(_weights), _color(_color),
-			brickLength(brickLength), time(time)
+			brickLength(brickLength), time(time), decayTime(decayTime)
 			{}
 } SDFUpdateParameterInteger;
 
@@ -1997,38 +2014,50 @@ void updateWrapperInteger
 	float *_distance = param._distance;
 	weighttype *_weights = param._weights;
 	colortype3 *_color = param._color;
-	double time = param.time;
+	const double time = param.time;
+	const double decayTime = param.decayTime;
 //	sidetype _brickLength = param.brickLength;
 
 //	volumetype brickSize = _brickLength*_brickLength*_brickLength;
 
 	volumetype l1 = startLeaf;
-
+int sumNewCells = 0;
+int sumOutdatedCells = 0;
   unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
   if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
+		std::cout << "size meshCellsUsed: " << meshCellsUsed->size() << " , _nLeavesQueued: " << nLeavesQueued << " " << std::endl;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
-			bool alreadySeen = false;
-			//-- Loop to check for outdated meshCells
-			for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
-				if ((*meshCellsUsed)[i] == brickIdx) {
-					//-- MeshCell was allready seen --> update latest time
-					alreadySeen = true;
-					(*latestUpdateTime)[i] = time;
-					//break;
+			if (decayTime >0.0){
+				if (!leafNumberIsOutdated[l]) {
+					bool alreadySeen = false;
+					//-- Loop to check for outdated meshCells
+					for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
+
+						if ((*meshCellsUsed)[i] == brickIdx) {
+							//-- MeshCell was allready seen --> update latest time
+							alreadySeen = true;
+							(*latestUpdateTime)[i] = time;
+							//break;
+						}
+						if ((time - (*latestUpdateTime)[i]) > 4.0) {
+							//-- The Mesh Cell is outdated
+							sumOutdatedCells++;
+							outdatedMeshCells->push_back((*meshCellsUsed)[i]);
+							meshCellsUsed->erase(meshCellsUsed->begin() + i);
+							latestUpdateTime->erase(latestUpdateTime->begin() + i);
+							i--;
+						}
+					}
+
+					if (alreadySeen == false) {
+						sumNewCells++;
+						meshCellsUsed->push_back(brickIdx);
+						latestUpdateTime->push_back(time);
+					}
 				}
-				if ((time - (*latestUpdateTime)[i]) > 8.0) {
-					//-- The Mesh Cell is outdated
-					outdatedMeshCells->push_back((*meshCellsUsed)[i]);
-					meshCellsUsed->erase(meshCellsUsed->begin() + i);
-					latestUpdateTime->erase(latestUpdateTime->begin() + i);
-				}
-			}
-			if (alreadySeen == false) {
-				meshCellsUsed->push_back(brickIdx);
-				latestUpdateTime->push_back(time);
 			}
 			sidetype3 o = _leafPos[brickIdx];
 			sidetype leafScale = _leafScale[brickIdx];
@@ -2058,23 +2087,42 @@ void updateWrapperInteger
 
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
-			if (!leafNumberIsOutdated[l]){
-		    if (depthNoise) {
-		    	//-- Depth Noise Data is available, use routine with adaptive weighting
-		    	update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-						scale,distanceThreshold,brickIdx,o,leafScale,
-						_distance,_weights,_color);
-		    } else {
-		    	//-- No Depth Noise Data is available, use standard update routine
-		    	update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-						scale,distanceThreshold,brickIdx,o,leafScale,
-						_distance,_weights,_color);
-		    }
+			if (decayTime > 0.0) {
+				//-- Time decay of the surface --> delete data on regions which haven't been seen in a certain time range
+				if (!leafNumberIsOutdated[l]){
+					if (depthNoise) {
+						//-- Depth Noise Data is available, use routine with adaptive weighting
+						update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+								m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+								scale,distanceThreshold,brickIdx,o,leafScale,
+								_distance,_weights,_color);
+					} else {
+						//-- No Depth Noise Data is available, use standard update routine
+						update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+								m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+								scale,distanceThreshold,brickIdx,o,leafScale,
+								_distance,_weights,_color);
+					}
+				} else {
+					//-- Delete Mesh element (by setting its weight to zero)
+					update8zeroWeight(brickIdx,_weights);
+					leafNumberIsOutdated[l] = false;
+				}
 			} else {
-				//-- Delete Mesh element (by setting its weight to zero)
-				update8zeroWeight(brickIdx,_weights);
+				//-- No Time decay of the reconstruction --> keep all data
+				if (depthNoise) {
+					//-- Depth Noise Data is available, use routine with adaptive weighting
+					update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+							m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+							scale,distanceThreshold,brickIdx,o,leafScale,
+							_distance,_weights,_color);
+				} else {
+					//-- No Depth Noise Data is available, use standard update routine
+					update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+							m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+							scale,distanceThreshold,brickIdx,o,leafScale,
+							_distance,_weights,_color);
+				}
 			}
 #else
 #pragma message "Compiling without AVX2 support"
@@ -2097,7 +2145,13 @@ void updateWrapperInteger
 		}
 		l1 = nLeavesQueued;
 	}
-
+	double oldest = 0.0;
+	for (int i = 0; i < latestUpdateTime->size(); i++) {
+		if ((time - (*latestUpdateTime)[i]) > oldest) {
+			oldest = (*latestUpdateTime)[i];
+		}
+	}
+	std::cout << "the oldest cell is: " << oldest << " " << std::endl;
   if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
 }
 

@@ -116,9 +116,9 @@ public:
 	bool _threadMeshing;
 //-- Update Fusion
 	// No Noise Data available
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime);
 	// With Noise Data
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime);
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
@@ -152,7 +152,7 @@ protected :
 	Eigen::Vector3f cubePos;
 	Eigen::Quaternionf cubePose;
 
-
+int _meshCounter;
 	//-- Fusion Thread Members
 	bool _threadFusion;
 	std::thread * _fusionThread;
@@ -164,6 +164,7 @@ protected :
 	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
 	std::queue<double> _queueTime;
+	std::queue<double> _queueDecayTime;
 	void fusionWrapperROS(void);
 	bool _isReady;
 	float3 _offset;

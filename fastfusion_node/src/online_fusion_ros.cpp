@@ -56,8 +56,9 @@ _currentMeshInterleaved(NULL),
 	pointIsClicked = false;
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
-	//-- Create Visualization Thread
+	_meshCounter = 0;
 	_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
+	//-- Create Visualization Thread
 }
 
 OnlineFusionROS::~OnlineFusionROS()
@@ -203,7 +204,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 	_fusionActive = true;
 	cv::Mat currImgRGB, currImgDepth, currNoise;
 	CameraInfo currPose;
-	double currTime;
+	double currTime, currDecayTime;
 	unsigned int framesProcessed = 0;
 	//-- Perform thread, as long as fusion is active
 	while (_runFusion) {
@@ -219,7 +220,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 		}
 		std::queue<cv::Mat> queueRGB, queueDepth, queueNoise;
 		std::queue<CameraInfo> queuePose;
-		std::queue<double> queueTime;
+		std::queue<double> queueTime, queueDecayTime;
 		for (size_t i = 0; i < _queueRGB.size(); i++) {
 			queueRGB.push(_queueRGB.front());
 			_queueRGB.pop();
@@ -229,6 +230,8 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 			_queuePose.pop();
 			queueTime.push(_queueTime.front());
 			_queueTime.pop();
+			queueDecayTime.push(_queueDecayTime.front());
+			_queueDecayTime.pop();
 			if (!_queueNoise.empty()) {
 				queueNoise.push(_queueNoise.front());
 				_queueNoise.pop();
@@ -250,8 +253,10 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				queueNoise.pop();
 				currTime = queueTime.front();
 				queueTime.pop();
+				currDecayTime = queueDecayTime.front();
+				queueDecayTime.pop();
 				//-- Add Map and perform update
-				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance, currTime);
+				_fusion->addMap(currImgDepth, currNoise,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance, currTime,currDecayTime);
 				_newMesh = _fusion->updateMeshes();
 			} else {
 				//-- No Depth Noise Data is available
@@ -263,9 +268,11 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				queuePose.pop();
 				currTime = queueTime.front();
 				queueTime.pop();
+				currDecayTime = queueDecayTime.front();
+				queueDecayTime.pop();
 				//updateLock.unlock();
 				//-- Add Map and perform update
-				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance,currTime);
+				_fusion->addMap(currImgDepth,currPose,currImgRGB,1.0f/_imageDepthScale,_maxCamDistance,currTime,currDecayTime);
 				_newMesh = _fusion->updateMeshes();
 			}
 		}
@@ -584,7 +591,7 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 }
 
 
-void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time) {
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime) {
 //-- Adapted version of the updateSlot()-function in order to process the current images.
 	if (!_threadFusion) {
 	//-- Unthreaded Fusion
@@ -597,7 +604,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		{
 		std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
-		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance,time);
+		_fusion->addMap(depthImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance,time, decayTime);
 		_fusion->updateMeshes();
 		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
 		if(_pointermeshes[0]) delete _pointermeshes[0];
@@ -610,9 +617,12 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter > 3) {
+		if (_frameCounter > 20) {
 			_update = true;
 			_frameCounter = 0;
+			std::string saveName = "/home/karrer/PartialMeshes/mesh" + std::to_string(_meshCounter) + ".ply";
+			_currentMeshInterleaved->writePLY(saveName,false);
+			_meshCounter++;
 		}
 		_isReady = true;
 		_fusionActive = false;
@@ -631,6 +641,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		_queueDepth.push(depthImg);
 		_queuePose.push(pose);
 		_queueTime.push(time);
+		_queueDecayTime.push(decayTime);
 		_newDataInQueue = true;
 		_fusionThreadCondition.notify_one();
 		}
@@ -648,15 +659,18 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			} // visualization scope end
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter > 3) {
+		if (_frameCounter > 60) {
 			_update = true;
+			//std::string saveName = "/home/karrer/PartialMeshes/mesh" + std::to_string(_meshCounter) + ".ply";
+			//_currentMeshInterleaved->writePLY(saveName,false);
+			//_meshCounter++;
 		}
 	}
 }
 
 
 
-void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time) {
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime) {
 //-- Update Fusion function when using it with noise data (from ToF camera)
 	if (!_threadFusion) {
 		//-- Unthreaded Fusion
@@ -669,7 +683,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		{
 		std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 		//-- Add and update Map
-		_fusion->addMap(depthImg, noiseImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance,time);
+		_fusion->addMap(depthImg, noiseImg,pose,rgbImg,1.0f/_imageDepthScale,_maxCamDistance,time, decayTime);
 		_fusion->updateMeshes();
 		if(!_pointermeshes.size()) _pointermeshes.resize(1,NULL);
 		if(_pointermeshes[0]) delete _pointermeshes[0];
@@ -698,11 +712,12 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		//-- Lock and update data-queue
 		{
 		std::unique_lock<std::mutex> updateLock(_fusionUpdateMutex);
-		_queueTime.push(time);
 		_queueRGB.push(rgbImg);
 		_queueDepth.push(depthImg);
 		_queueNoise.push(noiseImg);
 		_queuePose.push(pose);
+		_queueTime.push(time);
+		_queueDecayTime.push(decayTime);
 		_newDataInQueue = true;
 		_fusionThreadCondition.notify_one();
 		}
