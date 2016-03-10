@@ -2042,7 +2042,7 @@ void updateWrapperInteger
 							alreadySeen = true;
 							(*latestUpdateTime)[i] = time;
 						}
-						if ((time - (*latestUpdateTime)[i]) > 4.0) {
+						if ((time - (*latestUpdateTime)[i]) > decayTime) {
 							//-- The Mesh Cell is outdated --> add it to be removed
 							sumOutdatedCells++;
 							outdatedMeshCells->push_back((*meshCellsUsed)[i]);
