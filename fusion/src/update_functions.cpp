@@ -1983,6 +1983,11 @@ void updateWrapperInteger
 		bool * leafNumberIsOutdated
 )
 {
+//-- Wrapper Function to execute Update of the SDF values in the tree. The Depth data is given as Integer Values which are
+//-- scaled by the parameter param.scale. If noise data is available, the update is performed by using noise dependent weights.
+//-- If the Parameter param.decayTime is larger than zero, a time window based reconstruction is performed, i.e. bricks that are
+//-- not updated within the time horizon param.decayTime will be set to be removed.
+	//-- Extract the values of the SDFUpdateParameterInterger struct
 	const ushort *depth = param.depth;
 	const float *depthNoise = param.depthNoise;
 	float scaling = param.scaling;
@@ -2016,34 +2021,29 @@ void updateWrapperInteger
 	colortype3 *_color = param._color;
 	const double time = param.time;
 	const double decayTime = param.decayTime;
-//	sidetype _brickLength = param.brickLength;
 
-//	volumetype brickSize = _brickLength*_brickLength*_brickLength;
-
+	//-- Loop over all queued bricks
 	volumetype l1 = startLeaf;
-int sumNewCells = 0;
-int sumOutdatedCells = 0;
-  unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
-  if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
+	int sumNewCells = 0;
+	int sumOutdatedCells = 0;
+	unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
+	if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
-		std::cout << "size meshCellsUsed: " << meshCellsUsed->size() << " , _nLeavesQueued: " << nLeavesQueued << " " << std::endl;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
 			if (decayTime >0.0){
 				if (!leafNumberIsOutdated[l]) {
 					bool alreadySeen = false;
-					//-- Loop to check for outdated meshCells
+					//-- Loop to check for outdated bricks
 					for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
-
 						if ((*meshCellsUsed)[i] == brickIdx) {
 							//-- MeshCell was allready seen --> update latest time
 							alreadySeen = true;
 							(*latestUpdateTime)[i] = time;
-							//break;
 						}
 						if ((time - (*latestUpdateTime)[i]) > 4.0) {
-							//-- The Mesh Cell is outdated
+							//-- The Mesh Cell is outdated --> add it to be removed
 							sumOutdatedCells++;
 							outdatedMeshCells->push_back((*meshCellsUsed)[i]);
 							meshCellsUsed->erase(meshCellsUsed->begin() + i);
@@ -2051,8 +2051,8 @@ int sumOutdatedCells = 0;
 							i--;
 						}
 					}
-
 					if (alreadySeen == false) {
+						//-- First obervation of this brick --> add it to be tracked
 						sumNewCells++;
 						meshCellsUsed->push_back(brickIdx);
 						latestUpdateTime->push_back(time);
@@ -2061,29 +2061,6 @@ int sumOutdatedCells = 0;
 			}
 			sidetype3 o = _leafPos[brickIdx];
 			sidetype leafScale = _leafScale[brickIdx];
-
-//			update8NaiveInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopLoopSingleInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopLoopSingle_noJumpsInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopSIMDSingleInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
 
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
@@ -2126,33 +2103,24 @@ int sumOutdatedCells = 0;
 			}
 #else
 #pragma message "Compiling without AVX2 support"
-		    if (depthNoise) {
-		    	//-- Depth Noise Data is available, use routine with adaptive weighting
-		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+			if (depthNoise) {
+				//-- Depth Noise Data is available, use routine with adaptive weighting
+				update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+						m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 						scale,distanceThreshold,brickIdx,o,leafScale,
 						_distance,_weights,_color);
-		    } else {
-		    	//-- No Depth Noise Data is available, use standard update routine
-		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+			} else {
+				//-- No Depth Noise Data is available, use standard update routine
+				update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+						m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 						scale,distanceThreshold,brickIdx,o,leafScale,
 						_distance,_weights,_color);
-		    }
+			}
 #endif
-
-
 		}
 		l1 = nLeavesQueued;
 	}
-	double oldest = 0.0;
-	for (int i = 0; i < latestUpdateTime->size(); i++) {
-		if ((time - (*latestUpdateTime)[i]) > oldest) {
-			oldest = (*latestUpdateTime)[i];
-		}
-	}
-	std::cout << "the oldest cell is: " << oldest << " " << std::endl;
-  if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
+	if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
 }
 
 
