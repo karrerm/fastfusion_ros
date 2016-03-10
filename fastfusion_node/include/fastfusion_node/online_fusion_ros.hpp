@@ -85,6 +85,7 @@
 #include <condition_variable>
 
 
+
 class OnlineFusionROS
 {
 public:
@@ -116,10 +117,13 @@ public:
 	bool _threadMeshing;
 //-- Update Fusion
 	// No Noise Data available
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
 	// With Noise Data
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime);
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
 
+	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud() {
+			return _fusion->getCurrentPointCloud();
+	};
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
 	bool isAlive(){ return _fusionAlive;};

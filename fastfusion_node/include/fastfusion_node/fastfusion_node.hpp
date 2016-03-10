@@ -29,6 +29,8 @@
 #include <pcl/io/ply_io.h>
 #include "fastfusion_node/valueToColor.hpp"
 
+#include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 class FastFusionWrapper {
 public:
 	FastFusionWrapper(void);

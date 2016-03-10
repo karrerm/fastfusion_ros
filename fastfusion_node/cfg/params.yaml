@@ -10,22 +10,22 @@ threadFusion : true
 threadMeshing : true
 
 # Scales
-imageScale : 5000.0
-scale : 0.006
-distanceThreshold : 0.016
+imageScale : 1000.0
+scale : 0.009
+distanceThreshold : 0.03
 
 # Depth Consistency Checks
 depthConsistencyChecks : 0
 
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
-fileLocation : /home/karrer/test #/home/karrer/IROS2016/Evaluation/Vicon/Realsense/Desk/desk_6
+fileLocation : /home/karrer/forPaper
 # TF Id's
 world_id : /world
-cam_id : /depth
+cam_id : /realsense_frame
 use_slam : false
 
 
 # Define if using Time of flight sensor or not
-use_pmd : true
+use_pmd : false
 depth_noise: true

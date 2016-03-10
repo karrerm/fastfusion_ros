@@ -57,7 +57,7 @@ _currentMeshInterleaved(NULL),
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
 	_meshCounter = 0;
-	_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
+	//_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
 	//-- Create Visualization Thread
 }
 
@@ -260,6 +260,7 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				_newMesh = _fusion->updateMeshes();
 			} else {
 				//-- No Depth Noise Data is available
+				std::cout << "FrameQueue has: " << queueRGB.size() << " Elements " << std::endl;
 				currImgRGB = queueRGB.front();
 				queueRGB.pop();
 				currImgDepth = queueDepth.front();
@@ -591,7 +592,7 @@ void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEv
 }
 
 
-void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime) {
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp) {
 //-- Adapted version of the updateSlot()-function in order to process the current images.
 	if (!_threadFusion) {
 	//-- Unthreaded Fusion
@@ -616,14 +617,22 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		//-- Generate new Mesh
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		}
-		//-- Check whether to update Visualization
-		if (_frameCounter > 20) {
+		/*if (_frameCounter > 1) {
 			_update = true;
 			_frameCounter = 0;
-			std::string saveName = "/home/karrer/PartialMeshes/mesh" + std::to_string(_meshCounter) + ".ply";
+			std::string saveName = "/home/karrer/IROS2016/Evaluation/UAV_Mesh/Meshes/mesh_" + std::to_string(_meshCounter);
 			_currentMeshInterleaved->writePLY(saveName,false);
+			std::string saveNameTrans = "/home/karrer/IROS2016/Evaluation/UAV_Mesh/Transforms/transform_" + std::to_string(_meshCounter) + ".txt";
+			std::ofstream file(saveNameTrans);
+			file.precision(12);
+			if (file.is_open())
+			{
+				file << "timestamp:\n" << timestamp << std::endl;
+				file << "Transform: \n" << pose.getExtrinsic();
+				file.close();
+			}
 			_meshCounter++;
-		}
+		}*/
 		_isReady = true;
 		_fusionActive = false;
 	} else {
@@ -670,7 +679,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 
 
 
-void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime) {
+void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime, ros::Time timestamp) {
 //-- Update Fusion function when using it with noise data (from ToF camera)
 	if (!_threadFusion) {
 		//-- Unthreaded Fusion
@@ -695,10 +704,22 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter > 3) {
+		/*if (_frameCounter > 1) {
 			_update = true;
 			_frameCounter = 0;
-		}
+			std::string saveName = "/home/karrer/IROS2016/Evaluation/SubmeshViews/Meshes/mesh_" + std::to_string(_meshCounter) + ".ply";
+			_currentMeshInterleaved->writePLY(saveName,false);
+			std::string saveNameTrans = "/home/karrer/IROS2016/Evaluation/SubmeshViews/Transforms/transform_" + std::to_string(_meshCounter) + ".txt";
+			std::ofstream file(saveNameTrans);
+			file.precision(12);
+			if (file.is_open())
+			{
+				file << "timestamp:\n" << timestamp << std::endl;
+				file << "Transform: \n" << pose.getExtrinsic();
+				file.close();
+			}
+			_meshCounter++;
+		}*/
 		_isReady = true;
 		_fusionActive = false;
 	} else {

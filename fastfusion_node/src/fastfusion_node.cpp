@@ -251,9 +251,10 @@ void FastFusionWrapper::run() {
 		sync_->registerCallback(boost::bind(&FastFusionWrapper::imageCallback, this,  _1,  _2));
 		*/
 	}
+	ros::Publisher output_pub_ = node_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > ("fastfusion/pointCloud", 100);
 frameCounter_ = 0;
 	//ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
-	ros::Duration(3.0).sleep();
+	ros::Duration(1.5).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::Rate r(50);
 	bool halted = true;
@@ -273,6 +274,15 @@ frameCounter_ = 0;
 				halted = true;
 			}
 		}
+		/*if ((frameCounter_ > 8) && (runMapping_) ){
+			pcl::PointCloud<pcl::PointXYZRGB> cloud = onlinefusion_.getCurrentPointCloud();
+			//pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(cloud));
+			cloud.header.frame_id = "/world";
+			ros::Time stamp = ros::Time::now();
+			cloud.header.stamp = pcl_conversions::toPCL(stamp);
+			output_pub_.publish(cloud.makeShared());
+			frameCounter_ = 0;
+		}*/
 		ros::spinOnce();
 		r.sleep();
 	}
@@ -423,7 +433,7 @@ void FastFusionWrapper::imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& 
 	//-- Fuse the imcoming Images into existing map
 	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, 3.0);
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, -1.0, timestamp);
 	}
 }
 
@@ -438,6 +448,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 //--
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = msgDepth->header.stamp;
+	std::cout << "timestamp: " << timestamp << std::endl;
 	double time = timestamp.toSec();
 	broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
@@ -493,7 +504,8 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Fuse the imcoming Images into existing map
 	//onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose);
 	if (runMapping_) {
-		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, 3.0);
+		frameCounter_++;
+		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, imgNoise,incomingFramePose, time, -1.0, timestamp);
 	}
 }
 
@@ -599,9 +611,9 @@ void FastFusionWrapper::imageCallbackPicoSLAM(const sensor_msgs::ImageConstPtr& 
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
 		if (useSlam_) {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0,timestamp);
 		} else {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0,timestamp);
 		}
 	}
 }
@@ -668,9 +680,10 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
 		if (useSlam_) {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, 5.0,timestamp);
 		} else {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0);
+			frameCounter_++;
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr,incomingFramePose,time, -1.0,timestamp);
 		}
 	}
 }
@@ -715,7 +728,7 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 
 void FastFusionWrapper::registerPointCloudCallbackSLAM(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg, const nav_msgs::Odometry::ConstPtr& msgOdom) {
 //-- Callback for colored point cloud when use it with odometry messages
-	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.05) && !runMapping_){
+	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
 			return;
 	}
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
@@ -772,17 +785,17 @@ void FastFusionWrapper::registerPointCloudCallbackSLAM(const sensor_msgs::PointC
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
 		if (useSlam_) {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0,timestamp);
 		} else {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 10.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 10.0,timestamp);
 		}
 	}
 }
 
 void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg) {
 //-- Callback for colored point cloud when use it without odometry messages
-	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.05) && !runMapping_){
-			return;
+	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.01) || !runMapping_){
+		return;
 	}
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
 	pcl::fromROSMsg (*pcl_msg,pcl_cloud);
@@ -822,9 +835,9 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	tf::StampedTransform transform;
 	try{
 		ros::Time nowTime = ros::Time::now();
-		tfListener.waitForTransform(world_id_,"camera_depth_optical_frame",
+		tfListener.waitForTransform(world_id_,cam_id_,
 				timestamp, ros::Duration(2.0));
-		tfListener.lookupTransform(world_id_, "camera_depth_optical_frame",
+		tfListener.lookupTransform(world_id_, cam_id_,
 				timestamp, transform);
 	}
 	catch (tf::TransformException ex){
@@ -838,9 +851,10 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
 		if (useSlam_) {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 5.0,timestamp);
 		} else {
-			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, -1.0);
+			frameCounter_++;
+			onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, 3.0,timestamp);
 		}
 	}
 }
@@ -852,7 +866,7 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 //-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
 //-- Convert the messages to cv::Mat and wait for tf-transform corresponding to the frames
 //-- Push the data into the fastfusion pipeline for processing.
-	if (((msgRGB->header.stamp - previous_ts_).toSec() <= 0.03) && runMapping_){
+	if (((msgRGB->header.stamp - previous_ts_).toSec() <= 0.05) && runMapping_){
 		return;
 	}
 
@@ -891,9 +905,9 @@ void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB,
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_){
 		if (useSlam_) {
-			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 5.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 5.0,timestamp);
 		} else {
-			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 10.0);
+			onlinefusion_.updateFusion(imgRGB, imgDepth, incomingFramePose,time, 10.0,timestamp);
 		}
 	}
 }

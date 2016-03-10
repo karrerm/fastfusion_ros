@@ -370,7 +370,8 @@ protected:
 	double _avgTimeMesh;
 	double _avgTimeSumMesh;
 	bool _verbose;
-
+	unsigned int _avgBricksUpdated;
+	unsigned int _avgBricksTracked;
 	volumetype _averageLeaves;
 
 
