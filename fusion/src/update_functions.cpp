@@ -1472,25 +1472,19 @@ void update8AddLoopAVXSingleInteger
 		colortype3 *_color
 )
 {
-//-- Update Function which uses the available depth noise information for the SDF update.
-
+//-- Update Function which uses the available depth noise information for the SDF update. The weight increment
+//-- is scaled proportional to the inverse noise value given.
+	//-- Compute offset parameters
 	volumetype threadOffset = brickIdx*512;
 	float fleafScale = (float)(leafScale)*scale;
 	float ox = (m11*o.x+m12*o.y+m13*o.z)*scale + m14;
 	float oy = (m21*o.x+m22*o.y+m23*o.z)*scale + m24;
 	float oz = (m31*o.x+m32*o.y+m33*o.z)*scale + m34;
-//	float pxx, pxy, pxz, pyx, pyy, pyz, pzx, pzy, pzz;
 	float pyx, pyy, pyz, pzx, pzy, pzz;
 
 	float d11 = m11*fleafScale;
 	float d21 = m21*fleafScale;
 	float d31 = m31*fleafScale;
-	//-- 256 Bit vector initialization
-	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
-	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
-	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
-	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);				// Initializes 8 times with distanceThreshold*leafScale
-	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
 
 	float d12 = m12*fleafScale;
 	float d22 = m22*fleafScale;
@@ -1499,6 +1493,15 @@ void update8AddLoopAVXSingleInteger
 	float d13 = m13*fleafScale;
 	float d23 = m23*fleafScale;
 	float d33 = m33*fleafScale;
+
+	//-- 256 Bit vector initialization
+	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
+	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
+	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
+	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);				// Initializes 8 times with distanceThreshold*leafScale
+	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
+
+
 
 	//-- Serialized Update Algorithm (Algorithm 2 in Steinbrücker etal. icra2014)
 	pzx=ox;pzy=oy;pzz=oz;
@@ -1779,7 +1782,6 @@ void update8zeroWeight(volumetype &brickIdx, weighttype *_weights) {
 		}
 	}
 }
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 
