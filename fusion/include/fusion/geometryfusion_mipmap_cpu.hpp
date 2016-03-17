@@ -3,6 +3,7 @@
  *
  *  Created on: Apr 14, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 #ifndef GEOMETRY_MIPMAP_CPU_HPP_

@@ -3,6 +3,7 @@
  *
  *  Created on: Apr 14, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 #include <omp.h>
 #include <auxiliary/debug.hpp>

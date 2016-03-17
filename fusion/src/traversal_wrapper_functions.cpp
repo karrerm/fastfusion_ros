@@ -3,6 +3,7 @@
  *
  *  Created on: May 10, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 #include "traversal_functions.cpp"
