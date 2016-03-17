@@ -17,14 +17,10 @@
 #include <opencv2/opencv.hpp>
 
 OnlineFusionROS::OnlineFusionROS(bool createMeshList):
-_currentMeshForSave(NULL),
-_currentMeshInterleaved(NULL),
+	_currentMeshForSave(NULL),
+	_currentMeshInterleaved(NULL),
 	_fusion(NULL),
 	_imageDepthScale(5000.0f), _maxCamDistance(MAXCAMDISTANCE),
-	//_currentFrame(-1),
-	//_currentTrajectory(-1),
-//	_firstFrame(-1),
-	//_nextStopFrame(0),
 	_threadFusion(false),
 	_fusionThread(NULL),
 	_newMesh(false),
@@ -32,16 +28,16 @@ _currentMeshInterleaved(NULL),
 	_fusionAlive(true),
 	_threadImageReading(false),
 	_lastComputedFrame(-1),
-		_verbose(true),
-		_showCameraFrustum(true), _showDepthImage(true),
-		_currentMesh(NULL),_currentNV(0),_currentNF(0), _currentMeshType(0),
-		//_vertexBuffer(0), _faceBuffer(0), _edgeBuffer(0), _colorBuffer(0),
-		_vertexBufferSize(0), _faceBufferSize(0), _edgeBufferSize(0),
-		_onTrack(false), _onInterpolation(false), _saving(false),
-		 _runFusion(false), _createMeshList(createMeshList)
-,_lightingEnabled(false)
-,_colorEnabled(true)
-,_isSetup(false)
+	_verbose(true),
+	_showCameraFrustum(true), _showDepthImage(true),
+	_currentMesh(NULL),_currentNV(0),_currentNF(0), _currentMeshType(0),
+	//_vertexBuffer(0), _faceBuffer(0), _edgeBuffer(0), _colorBuffer(0),
+	_vertexBufferSize(0), _faceBufferSize(0), _edgeBufferSize(0),
+	_onTrack(false), _onInterpolation(false), _saving(false),
+	_runFusion(false), _createMeshList(createMeshList),
+	_lightingEnabled(false),
+	_colorEnabled(true),
+	_isSetup(false)
 {
 	_meshNumber = 0;
 	_fusionNumber = 0;
@@ -168,7 +164,7 @@ bool OnlineFusionROS::startNewMap() {
 	return true;
 }
 
-void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
+void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
 								bool saveMesh, std::string fileName){
 //-- Initialize FusionMipMapCPU-class (_fusion)
 	_imageDepthScale = imageScale;
@@ -182,20 +178,6 @@ void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float im
 	_offset.x = _offset.y = _offset.z = 0.0f;
 	//startNewMap();
 }
-/*  Not needed in this implementation
-typedef struct FusionParameter_{
-  FusionMipMapCPU *fusion;
-  float imageDepthScale;
-  float maxCamDistance;
-  bool threadImageReading;
-  size_t stopFrame;
-  FusionParameter_(FusionMipMapCPU *fusion_p, float imageDepthScale_p, float maxCamDistance_p, bool threadImageReading_p, size_t stopFrame_p)
-  :fusion(fusion_p),imageDepthScale(imageDepthScale_p),maxCamDistance(maxCamDistance_p), threadImageReading(threadImageReading_p)
-  ,stopFrame(stopFrame_p){}
-} FusionParameter;
-*/
-
-
 
 void OnlineFusionROS::fusionWrapperROS(void) {
 //-- Fusion-Wrapper member to enable threading the fusion process. To buffer the data needed for the fusion
