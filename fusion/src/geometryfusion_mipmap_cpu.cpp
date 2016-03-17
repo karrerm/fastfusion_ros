@@ -412,11 +412,6 @@ FusionMipMapCPU::OwnMeshCellArray_ &FusionMipMapCPU::OwnMeshCellArray_::operator
 
 
 
-
-
-
-
-
 FusionMipMapCPU::FusionMipMapCPU(
 		float offsetX, float offsetY, float offsetZ,
 		float scale, float distanceThreshold,
@@ -978,6 +973,7 @@ FusionMipMapCPU::~FusionMipMapCPU()
 	if(_updateCurrent) delete _updateCurrent;
 	if(_updateNext) delete _updateNext;
 
+	//-- Output the Statistics for the reconstruction
 	if(_verbose) fprintf(stderr,"\nAverage Time for Surface Traversal: %f",
 			_avgTimeQueueSurface/(cv::getTickFrequency()*_framesAdded));
 	if(_verbose) fprintf(stderr,"\nAverage Time for Frustum Traversal: %f",
@@ -991,8 +987,7 @@ FusionMipMapCPU::~FusionMipMapCPU()
 	if(_verbose) fprintf(stderr,"\nAverage Time for Summing Up the Mesh Cells: %f",
 			_avgTimeSumMesh/(cv::getTickFrequency()*_framesAdded));
 	if(_verbose) fprintf(stderr,"\nAverage Number of Leaves: %i",_averageLeaves/_framesAdded);
-	std::cout << "\nAverage Number of Bricks queued: " << ((double)_avgBricksUpdated) /((double) _framesAdded)<< " " << std::endl;
-	std::cout << "Average Number of tracked Bricks: " << ((double)_avgBricksTracked) / ((double) _framesAdded) << " " << std::endl;
+	if(_verbose) fprintf(stderr,"\nAverage Number of trackes Bricks: %d", ((double)_avgBricksTracked) / ((double) _framesAdded));
 	fprintf(stderr,"\nFusionOctreeGPU deleted");
 
 
@@ -1603,6 +1598,8 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm
 int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
 		const cv::Mat &rgb, float scaling, float maxcamdistance, double time, double decayTime) {
 //-- addMap: Function to add new depth information to the SDF-tree structure. This version also
@@ -1668,7 +1665,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 
 	double time1 = (double)cv::getTickCount();
 
-	//-- Correct for different image size of depth and color image (not used -> take care of it before!!)
+	//-- Set properties related to image size
 	_differentImageSize |= _imageWidth!=depth.cols || _imageHeight!=depth.rows;
 	if(_imageWidth!=depth.cols || _imageHeight!=depth.rows){
 		_imageWidth = depth.cols; _imageHeight = depth.rows;
@@ -1710,7 +1707,6 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	intr2.at<double>(0,0), intr2.at<double>(1,1),
 	intr2.at<double>(0,2), intr2.at<double>(1,2));
 
-//	bool colorMap2 = _useColor && (rgb.cols==depth.cols&&rgb.rows==depth.rows);
 	//-- Extract individual matrix entries of rigid body transformation
 	float m11 = pInv.r11; float m12 = pInv.r12;
 	float m13 = pInv.r13; float m14 = pInv.t1 ;
@@ -1719,7 +1715,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	float m31 = pInv.r31; float m32 = pInv.r32;
 	float m33 = pInv.r33; float m34 = pInv.t3;
 
-	//-- If fusion is threaded --> add thread
+	//-- If fusion is threaded --> add thread (not used)
 	std::thread *distanceUpdateThread = NULL;
 	if(_threaded){
 	distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
@@ -1762,7 +1758,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			,_meshCells,_meshCellIndicesBranch,_meshCellIndicesLeaf,_leafParent,_boundary,_performIncrementalMeshing);
 
 #else
-	//-- This one is used
+	//-- Compute the Bricks which have to be queued for the current depth image
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
 			depthData, noiseData,scaling,maxcamdistance,
@@ -1772,8 +1768,11 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 			_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->data(),
 			_newBudsSinceMeshingToQueue.leafBuds->data(),
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
-	queryOutdatedBricks(_nLeavesQueuedSurface,
-			_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells,_leafNumberIsOutdated);
+	//-- If time-window reconstruction--> queue outdated bricks
+	if (decayTime > 0.0) {
+		queryOutdatedBricks(_nLeavesQueuedSurface,
+				_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells,_leafNumberIsOutdated);
+	}
 	eprintf("\n%i new Subtrees and %i new Leaves this Map",
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
 	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
@@ -1787,11 +1786,8 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 
 #endif
 
-
-//	fprintf(stderr,"!");
 	double time2 = (double)cv::getTickCount();
 	double time3 = (double)cv::getTickCount();
-
 	//-- Check if tree needs to grow --> grow it
 	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
 			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
@@ -1808,7 +1804,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 		time4 = (double)cv::getTickCount();
 	}
 	else{
-//		fprintf(stderr, "U");
+		//-- Update the SDF values where observed
 		_avgBricksUpdated += _nLeavesQueuedSurface;
 		updateWrapperInteger(SDFUpdateParameterInteger(
 				(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
@@ -1818,16 +1814,8 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 				_leafNumberSurface,_leafPos,_leafScale,
 				_distance,_weights,_color,_brickLength,time, decayTime),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
 		time4 = (double)cv::getTickCount();
-
-//		fprintf(stderr,"!");
 	}
-
-	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
-			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
-	}
-
 	double time5 = (double)cv::getTickCount();
-
 
 
 	if(_nBranchesUsed > _nBranchesTotal){
@@ -1848,44 +1836,17 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 		}
 	}
 
-
 #ifndef DEBUG_NO_LEAFCELLS
 	if(_performIncrementalMeshing){
-
 #ifdef SEPARATE_MESHCELL_STRUCTURE
-		//TODO: Das hier in den Nachbarthread migrieren
-//		if(_newBudsSinceMeshingToClear.subtreeBuds->size() ||
-//				_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size() ||
-//				_newBudsSinceMeshingToClear.leafBuds->size()){
-//			fprintf(stderr,"\nERROR: Vector of Branches queued for MeshCell Structure"
-//					" Creation not yet empty: %li %li %li",
-//					_newBudsSinceMeshingToClear.subtreeBuds->size(),
-//					_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size(),
-//					_newBudsSinceMeshingToClear.leafBuds->size());
-//		}
-//		BudsAnchor temp = _newBudsSinceMeshingToClear;
-//		_newBudsSinceMeshingToClear = _newBudsSinceMeshingToAccumulate;
-//		_newBudsSinceMeshingToAccumulate = temp;
-//		_treeSizeForMeshing = _nBranchesUsed;
-
 		beforeUpdateMeshCellStructure();
-
 		updateMeshCellStructure();
-
 		afterUpdateMeshCellStructure();
-
-//		_treeSizeSinceMeshing = _treeSizeForMeshing;
-//
-//		pushLeafQueueForMeshing();
-
 #else
-
 		eprintf("\nPushing Mesh Cell queue");
 		pushMeshCellQueue();
 		eprintf("\nMesh Cell queue pushed");
 #endif
-
-
 	}
 #endif
 
@@ -1906,12 +1867,9 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 		_frameStatistics.back().timeSDFUpdate = time4-time3;
 		_frameStatistics.back().timeTraversal = time2-time1;
 	}
-
 	_averageLeaves += _nLeavesQueuedSurface;
 	_avgBricksTracked += _usedMeshCells.size();
-	std::cout << _avgBricksTracked << std::endl;
 	if((_framesAdded-1)%25==0){
-
 		size_t meshIndicesBranchSize = 0;
 		size_t meshIndicesBranchEmptySize = 0;
 		for(size_t i=0;i<_meshCellIndicesBranch.size();i++){
@@ -1947,15 +1905,16 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 		eprintf("\nMeshesSize: Vertices: %li , Faces: %li , Color: %li",
 				verticesSize,facesSize,colorsSize);
 	}
-
 	return _nLeavesQueuedSurface;
 
 }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 		float scaling, float maxcamdistance, double time, double decayTime)
 {
-	//fprintf(stderr,"\nI[%i]",_framesAdded);
+//-- addMap: Function to add new depth information to the SDF-tree structure. This version uses
+//-- the uniform weighting scheme, where only geometric measurements are taken into account.
 	//Parameter Helpers
 	cv::Mat rot = caminfo.getRotation();
 	cv::Mat trans = caminfo.getTranslation();
@@ -1973,86 +1932,6 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			intr.at<double>(0,0), intr.at<double>(1,1),
 			intr.at<double>(0,2), intr.at<double>(1,2));
 	const ushort *depthdata = (ushort*)depth.data;
-
-//	if(_numCheckImages){
-//		_lastDepthImages.push_front(depth);
-//		_lastCameraInfos.push_front(caminfo);
-//		if(_lastDepthImages.size()>_numCheckImages+1){
-//			_lastDepthImages.pop_back();
-//			_lastCameraInfos.pop_back();
-//		}
-////		ushort *depthdata2 = (ushort*)_lastDepthImages.back().data;
-//		ushort *depthdata2 = (ushort*)depth.data;
-//		int nx = _lastDepthImages.back().cols;
-//		int ny = _lastDepthImages.back().rows;
-//
-////		cv::Mat oldImage = depth.clone();
-////		cv::imshow("Old",oldImage);
-//
-//		std::list<cv::Mat>::iterator itImage = _lastDepthImages.begin(); itImage++;
-//		std::list<CameraInfo>::iterator itCaminfo = _lastCameraInfos.begin(); itCaminfo++;
-//		while(itImage!=_lastDepthImages.end() && itCaminfo!=_lastCameraInfos.end()){
-//
-//			ushort *checkdata = (ushort*)itImage->data;
-//			int nxCheck = itImage->cols;
-//			int nyCheck = itImage->rows;
-//			cv::Mat intCheck = itCaminfo->getIntrinsic();
-//			float fxCheck = intCheck.at<double>(0,0);
-//			float fyCheck = intCheck.at<double>(1,1);
-//			float cxCheck = intCheck.at<double>(0,2);
-//			float cyCheck = intCheck.at<double>(1,2);
-//
-//			CameraInfo relative = caminfo;
-//			relative.setExtrinsic(itCaminfo->getExtrinsicInverse()*relative.getExtrinsic());
-//
-//			cv::Mat rotCheck = relative.getRotation();
-//			cv::Mat transCheck = relative.getTranslation();
-//			cv::Mat intrCheck = relative.getIntrinsic();
-//
-//			camPamsFloat pCheck(
-//					rotCheck.at<double>(0,0), rotCheck.at<double>(0,1), rotCheck.at<double>(0,2),
-//					rotCheck.at<double>(1,0), rotCheck.at<double>(1,1), rotCheck.at<double>(1,2),
-//					rotCheck.at<double>(2,0), rotCheck.at<double>(2,1), rotCheck.at<double>(2,2),
-//					transCheck.at<double>(0,0),transCheck.at<double>(1,0),transCheck.at<double>(2,0),
-//					intrCheck.at<double>(0,0), intrCheck.at<double>(1,1),
-//					intrCheck.at<double>(0,2), intrCheck.at<double>(1,2));
-//
-//
-//			for(int y=0;y<ny;y++){
-//				for(int x=0;x<nx;x++){
-//					float h = depthdata2[y*nx+x]*scaling;
-//					if(h>0.0f && h<maxcamdistance){
-//						float px = (x-pCheck.cx)/pCheck.fx*h;
-//						float py = (y-pCheck.cy)/pCheck.fy*h;
-//						float pz = h;
-//						float qx = pCheck.r11*px + pCheck.r12*py + pCheck.r13*pz + pCheck.t1;
-//						float qy = pCheck.r21*px + pCheck.r22*py + pCheck.r23*pz + pCheck.t2;
-//						float qz = pCheck.r31*px + pCheck.r32*py + pCheck.r33*pz + pCheck.t3;
-//
-//						int imx = (int)(floor(qx/qz*fxCheck+cxCheck));
-//						int imy = (int)(floor(qy/qz*fyCheck+cyCheck));
-//
-//						if(imx>=0 && imx<nxCheck && imy>=0 && imy<nyCheck){
-//							float h2 = checkdata[imy*nxCheck+imx]*scaling;
-//							if(h2<maxcamdistance && h2>qz){
-//								depthdata2[y*nx+x] = 0;
-//							}
-//						}
-//					}
-////					depthdata2[y*nx+x] = 0;
-//				}
-//			}
-//
-////			cv::imshow("New",depth);
-//
-//			itImage++; itCaminfo++;
-//		}
-////		cv::waitKey(0);
-//	}
-
-
-	//Empty the Data Queue
-	//TODO: Instead O(n) operation go through the queue
 	for(volumetype i=0;i<_nLeavesTotal;i++) _queueIndexOfLeaf[i] = MAXLEAFNUMBER;
 	_nLeavesQueuedSurface = 0;
 	_nLeavesQueuedFrustum = 0;
@@ -2089,7 +1968,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 
 
 	double time1 = (double)cv::getTickCount();
-
+	//-- Compute parameters depending on the image size
 	_differentImageSize |= _imageWidth!=depth.cols || _imageHeight!=depth.rows;
 	if(_imageWidth!=depth.cols || _imageHeight!=depth.rows){
 		_imageWidth = depth.cols; _imageHeight = depth.rows;
@@ -2114,13 +1993,14 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	_boxMin.x = _boxMin.y = _boxMin.z = 0;
 	_boxMax.x = _boxMax.y = _boxMax.z = _n-1;
 
-
 	_threadValid = true;
+	//-- Extract camera info
 	CameraInfo caminfo2 = caminfo;
 	caminfo2.setExtrinsic(caminfo2.getExtrinsicInverse());
 	cv::Mat rot2 = caminfo2.getRotation();
 	cv::Mat trans2 = caminfo2.getTranslation();
 	cv::Mat intr2 = caminfo2.getIntrinsic();
+	//-- Compute inverse Extrinsics
 	camPamsFloat pInv(
 	rot2.at<double>(0,0), rot2.at<double>(0,1), rot2.at<double>(0,2),
 	rot2.at<double>(1,0), rot2.at<double>(1,1), rot2.at<double>(1,2),
@@ -2131,8 +2011,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	intr2.at<double>(0,0), intr2.at<double>(1,1),
 	intr2.at<double>(0,2), intr2.at<double>(1,2));
 
-//	bool colorMap2 = _useColor && (rgb.cols==depth.cols&&rgb.rows==depth.rows);
-
+	//-- Extract the individual entries of the extrinsics matrix
 	float m11 = pInv.r11; float m12 = pInv.r12;
 	float m13 = pInv.r13; float m14 = pInv.t1 ;
 	float m21 = pInv.r21; float m22 = pInv.r22;
@@ -2156,11 +2035,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
 	__attribute__ ((aligned (16))) float qxp2[_imageWidth];
 	__attribute__ ((aligned (16))) float qxp3[_imageWidth];
-/*
-	__attribute__ ((aligned (8))) float qxp1[_imageWidth];
-	__attribute__ ((aligned (8))) float qxp2[_imageWidth];
-	__attribute__ ((aligned (8))) float qxp3[_imageWidth];
-*/
+
 	for(int x=0;x<_imageWidth;x++){
 		qxp1[x] = p.r11*_pxp[x];
 		qxp2[x] = p.r21*_pxp[x];
@@ -2170,18 +2045,13 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	__attribute__ ((aligned (16))) float qyp1[_imageHeight];
 	__attribute__ ((aligned (16))) float qyp2[_imageHeight];
 	__attribute__ ((aligned (16))) float qyp3[_imageHeight];
-/*
-	__attribute__ ((aligned (8))) float qyp1[_imageHeight];
-	__attribute__ ((aligned (8))) float qyp2[_imageHeight];
-	__attribute__ ((aligned (8))) float qyp3[_imageHeight];
-*/	
+
 	for(int y=0;y<_imageHeight;y++){
 		qyp1[y] = p.r12*_pyp[y] + p.r13;
 		qyp2[y] = p.r22*_pyp[y] + p.r23;
 		qyp3[y] = p.r32*_pyp[y] + p.r33;
 	}
 
-//	fprintf(stderr, "T");
 
 #ifndef SEPARATE_MESHCELL_STRUCTURE
 	transformLoopSimPrecalculatedNeg_vis(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
@@ -2192,6 +2062,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			,_meshCells,_meshCellIndicesBranch,_meshCellIndicesLeaf,_leafParent,_boundary,_performIncrementalMeshing);
 
 #else
+	//-- Compute which Bricks need to be queued for the current depth image
 	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
 			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
 			depthdata,NULL,scaling,maxcamdistance,
@@ -2203,8 +2074,11 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
 	eprintf("\n%i new Subtrees and %i new Leaves this Map",
 			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
-	queryOutdatedBricks(_nLeavesQueuedSurface,
-			_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells, _leafNumberIsOutdated);
+	//-- If time window reconstruction--> queue outdated bricks
+	if (decayTime > 0.0) {
+		queryOutdatedBricks(_nLeavesQueuedSurface,
+				_leafNumberSurface,_queueIndexOfLeaf, &_outdatedMeshCells, _leafNumberIsOutdated);
+	}
 	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
 		_newBudsSinceMeshingToAccumulate.subtreeBuds->push_back((*_newBudsSinceMeshingToQueue.subtreeBuds)[i]);
 		_newBudsSinceMeshingToAccumulate.subtreeBudsParentLeaf->push_back((*_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf)[i]);
@@ -2216,32 +2090,15 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 
 #endif
 
-
-//	fprintf(stderr,"!");
 	double time2 = (double)cv::getTickCount();
-//
-//	fprintf(stderr,"F");
-//	Frustum frustum(caminfo,depth.cols,depth.rows,FRUSTUM_FAR);
-//
-//	float tx = trans.at<double>(0,0);
-//	float ty = trans.at<double>(2,0);
-//	float tz = trans.at<double>(2,0);
-//
-//	fprintf(stderr,"[%i|%i]",_nLeavesQueuedSurface,_nLeavesQueuedFrustum);
-//	fprintf(stderr,"!");
-//
-//
 	double time3 = (double)cv::getTickCount();
 
+	//-- Grow Tree if necessary
 	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
 			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
 		grow();
 	}
-
-
 	double time4;
-
-
 	_threadValid = false;
 	if(_threaded){
 		distanceUpdateThread->join();
@@ -2250,7 +2107,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 		time4 = (double)cv::getTickCount();
 	}
 	else{
-//		fprintf(stderr, "U");
+		//-- Update the SDF values of the queued Bricks
 		_avgBricksUpdated += _nLeavesQueuedSurface;
 		updateWrapperInteger(SDFUpdateParameterInteger(
 				(const ushort*)depthdata,  NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
@@ -2259,21 +2116,11 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
 				_distance,_weights,_color,_brickLength,time,decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells, _leafNumberIsOutdated);
-
 		time4 = (double)cv::getTickCount();
-
-//		fprintf(stderr,"!");
 	}
-
-	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
-			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
-	}
-
-
 	double time5 = (double)cv::getTickCount();
 
-
-
+	//-- Some debug output
 	if(_nBranchesUsed > _nBranchesTotal){
 		_performIncrementalMeshing = false;
 		fprintf(stderr,"\nTree is out of Memory by at least %i Branches: %i vs. %i",
@@ -2297,50 +2144,24 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	if(_performIncrementalMeshing){
 
 #ifdef SEPARATE_MESHCELL_STRUCTURE
-		//TODO: Das hier in den Nachbarthread migrieren
-//		if(_newBudsSinceMeshingToClear.subtreeBuds->size() ||
-//				_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size() ||
-//				_newBudsSinceMeshingToClear.leafBuds->size()){
-//			fprintf(stderr,"\nERROR: Vector of Branches queued for MeshCell Structure"
-//					" Creation not yet empty: %li %li %li",
-//					_newBudsSinceMeshingToClear.subtreeBuds->size(),
-//					_newBudsSinceMeshingToClear.subtreeBudsParentLeaf->size(),
-//					_newBudsSinceMeshingToClear.leafBuds->size());
-//		}
-//		BudsAnchor temp = _newBudsSinceMeshingToClear;
-//		_newBudsSinceMeshingToClear = _newBudsSinceMeshingToAccumulate;
-//		_newBudsSinceMeshingToAccumulate = temp;
-//		_treeSizeForMeshing = _nBranchesUsed;
-
 		beforeUpdateMeshCellStructure();
-
 		updateMeshCellStructure();
-
 		afterUpdateMeshCellStructure();
-
-//		_treeSizeSinceMeshing = _treeSizeForMeshing;
-//
-//		pushLeafQueueForMeshing();
-
 #else
-
 		eprintf("\nPushing Mesh Cell queue");
 		pushMeshCellQueue();
 		eprintf("\nMesh Cell queue pushed");
 #endif
-
-
 	}
 #endif
-
-
+	//-- Update Values for statistics
 	_avgTimeQueueSurface += time2-time1;
 	_avgTimeQueueFrustum += time3-time2;
 	_avgTimeBricksSurface += time4-time3;
 	_avgTimeBricksFrustum += time5-time4;
 	_sumTimeOfAllFrames += time5-time1;
 	_framesAdded++;
-
+	//-- Logging statistics
 	if(_loggingEnabled){
 		_frameStatistics.push_back(FrameStatistic());
 		_frameStatistics.back().leavesQueued = _nLeavesQueuedSurface;
@@ -2350,12 +2171,9 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 		_frameStatistics.back().timeSDFUpdate = time4-time3;
 		_frameStatistics.back().timeTraversal = time2-time1;
 	}
-
 	_averageLeaves += _nLeavesQueuedSurface;
 	_avgBricksTracked += _usedMeshCells.size();
-	std::cout << _avgBricksTracked << std::endl;
 	if((_framesAdded-1)%25==0){
-
 		size_t meshIndicesBranchSize = 0;
 		size_t meshIndicesBranchEmptySize = 0;
 		for(size_t i=0;i<_meshCellIndicesBranch.size();i++){
@@ -2376,7 +2194,6 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 		eprintf("\nEmpty Size of a Mesh: %li, empty Size of all Meshes %li * %li = %li",
 				sizeof(MeshInterleaved),_meshCells.size(),sizeof(MeshInterleaved),_meshCells.size()*sizeof(MeshInterleaved));
 		eprintf("\nMesh Cell Indices Leaf use %li Bytes",_meshCellIndicesLeaf.capacity()*sizeof(LeafNeighborhood));
-
 		size_t verticesSize = 0;
 		size_t facesSize = 0;
 		size_t colorsSize = 0;
@@ -2391,10 +2208,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 		eprintf("\nMeshesSize: Vertices: %li , Faces: %li , Color: %li",
 				verticesSize,facesSize,colorsSize);
 	}
-
-
 	return _nLeavesQueuedSurface;
-
 }
 
 
