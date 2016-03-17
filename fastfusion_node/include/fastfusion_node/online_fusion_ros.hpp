@@ -2,7 +2,7 @@
  * online_fusion_ros.hpp
  *
  *  Created on: Sep 29, 2015
- *      Author: karrer
+ *      Author: karrerm
  */
 #ifndef INCLUDE_ONLINE_FUSION_ROS_HPP_
 #define INCLUDE_ONLINE_FUSION_ROS_HPP_
@@ -13,12 +13,10 @@
 
 #include <boost/thread/thread.hpp>
 #include <pcl/common/common_headers.h>
-//#include <pcl/features/normal_3d.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/point_picking_event.h>
-//#include <pcl/console/parse.h>
 
 #include <pcl/PolygonMesh.h>
 #include <pcl/PCLPointCloud2.h>
@@ -57,18 +55,11 @@
 #include <auxiliary/debug.hpp>
 
 #include <fusion/geometryfusion_mipmap_cpu.hpp>
-
-//#include <qapplication.h>
-
 #include <tclap/CmdLine.h>
 #include <fusion/mesh.hpp>
-
-//#include <QGLViewer/qglviewer.h>
 #include <camerautils/camerautils.hpp>
-//#include <fusionGPU/geometryfusion_single_aos.hpp>
 #include <fusion/geometryfusion_mipmap_cpu.hpp>
 #include <fusion/mesh.hpp>
-//#include <QtCore/QTimer>
 
 #define BOXDELTA 0.001
 //#define VOLUMERADIUS 1.5
@@ -92,7 +83,7 @@ public:
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
 	//-- Initialization of the parameters read from the ROS parameter file
-	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold, int depthChecks,
+	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
 			   bool saveMesh, std::string fileName);
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
