@@ -9,7 +9,5 @@ catkin_simple(ALL_DEPS_REQUIRED)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-#cs_add_library(${PROJECT_NAME}	src/camerautils.cpp)				
-
 cs_install()
 cs_export()

@@ -12,10 +12,9 @@ find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories("/usr/include/eigen3")
+include_directories(${Eigen_INCLUDE_DIRS})
 
 include_directories(${PROJECT_SOURCE_DIR}/src/camerautils)
-include_directories("/usr/include/eigen3")
 
 add_library(camerautils STATIC
 						src/camerautils.cpp)
