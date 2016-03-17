@@ -14,9 +14,6 @@ imageScale : 1000.0
 scale : 0.009
 distanceThreshold : 0.03
 
-# Depth Consistency Checks
-depthConsistencyChecks : 0
-
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
 fileLocation : /home/karrer/forPaper
@@ -28,7 +25,7 @@ cam_id : /realsense_frame
 # Use time-window based reconstruction
 # Set decay_time to value <= 0.0 to achieve full reconstruction,
 # otherwise the defined time window (decay_time) is used
-decay_time: -1.0
+decay_time : -1.0
 
 # Define if using Time of flight sensor or not
 use_pmd : false
