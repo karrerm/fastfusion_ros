@@ -20,6 +20,7 @@ fileLocation : /home/karrer/forPaper
 
 # TF Id's
 world_id : /world
+tracker_id : /body
 cam_id : /realsense_frame
 
 # Use time-window based reconstruction
