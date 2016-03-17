@@ -98,6 +98,7 @@ protected:
 	Eigen::Vector3d t_cam0_imu, t_depth_cam0, t_rgb_cam0, t_body_cam;
 	std::string world_id_;
 	std::string cam_id_;
+	std::string tracker_id_;
 
 	//-- Should currently be mapped or not?
 	bool runMapping_;

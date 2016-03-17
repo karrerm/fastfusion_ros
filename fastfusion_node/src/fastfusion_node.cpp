@@ -33,6 +33,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("fileLocation",fileLocation);			// Location for mesh save
 	loadSuccess &= nodeLocal_.getParam("world_id",world_id_);					// Frame id of origin
 	loadSuccess &= nodeLocal_.getParam("cam_id",cam_id_);						// Frame id of depth camera
+	loadSuccess &= nodeLocal_.getParam("tracker_id",tracker_id_);				// Frame id of the pose measurement
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);						// Use ToF of RGBD
 	loadSuccess &= nodeLocal_.getParam("depth_noise",depth_noise_);				// Depth noise data is available
 
@@ -169,13 +170,11 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		distCoeffRGB_.at<double>(3,0) = (double)distortion_rgb[3];
 		distCoeffRGB_.at<double>(4,0) = (double)distortion_rgb[4];
 	}
-	latestDerivativeSingularVals_ = new double [10];
-	singValCounter_ = 0;
 
 	if (loadSuccess) {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		//-- Configure fastfusion framework
-		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale_, (float) scale, (float) distThreshold, depthChecks,
+		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale_, (float) scale, (float) distThreshold,
 				saveMesh, fileLocation);
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
@@ -326,10 +325,10 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 		}
 	}
 
-	//-- Create Dummy RGB Frame
+	//-- Generate RGB frame according to noise
 	cv::Mat imgRGB(imgDepthCorr.rows, imgDepthCorr.cols, CV_8UC3, CV_RGB(200,200,200));
-
 	jetColorNoise(imgNoise,&imgRGB,0.005,0.05);
+
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
 	try{
@@ -588,24 +587,12 @@ void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 //-- Function used to broadcast the necessary tf-transformations to complete the chain between origin
 //-- and the corresponding pose of the depth sensor.
 	if (use_pmd_) {
-		if (useSlam_) {
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
-		} else {
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
-		}
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
 	} else {
-		if (useSlam_) {
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "camera0", cam_id_));
-		} else {
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "body", "cam0"));
-			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
-		}
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
-	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, "camera_imu", "cam0"));
-	//tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, "imu", "cam0"));
-
 }
 
 
