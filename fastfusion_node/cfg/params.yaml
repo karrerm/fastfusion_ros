@@ -20,12 +20,18 @@ depthConsistencyChecks : 0
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
 fileLocation : /home/karrer/forPaper
+
 # TF Id's
 world_id : /world
 cam_id : /realsense_frame
-use_slam : false
 
+# Use time-window based reconstruction
+# Set decay_time to value <= 0.0 to achieve full reconstruction,
+# otherwise the defined time window (decay_time) is used
+decay_time: -1.0
 
 # Define if using Time of flight sensor or not
 use_pmd : false
+
+# Define if want to use Noise Data (only use with use_pmd = true)
 depth_noise: true
