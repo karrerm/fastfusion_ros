@@ -3,6 +3,7 @@
  *
  *  Created on: May 10, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 #include "traversal_functions.cpp"
@@ -702,3 +703,21 @@ inline void transformLoopSimPrecalculatedNeg_subtree
 		}
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 9.02.2016
+inline void queryOutdatedBricks(volumetype &_nLeavesQueued,
+		volumetype *_leafNumber,volumetype *_queueIndexOfLeaf, std::vector<volumetype> *outdatedMeshCells, bool *_leafNumberIsOutdated)
+{
+//-- Inline function to add outdated bricks to queue in order to get the mesh updated (deleted)
+	//-- Loop over the outdatedMeshCells vector
+	for (int i = 0; i < outdatedMeshCells->size(); i++) {
+		_queueIndexOfLeaf[(*outdatedMeshCells)[i]] = _nLeavesQueued;
+		_leafNumber[_nLeavesQueued] = (*outdatedMeshCells)[i];
+		_leafNumberIsOutdated[_nLeavesQueued] = true;
+		_nLeavesQueued++;
+	}
+	//-- Clear the vector
+	outdatedMeshCells->clear();
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

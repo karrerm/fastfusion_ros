@@ -3,6 +3,7 @@
  *
  *  Created on: Apr 14, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 #ifndef GEOMETRY_MIPMAP_CPU_HPP_
@@ -19,11 +20,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-
 #include <list>
-
-//#include <boost/thread.hpp>
-
 
 typedef class FloatVertex_
 {
@@ -125,29 +122,32 @@ public:
 	//-- Check if mesh is updated
 	bool meshUpdateFinished();
 
-	//Adding single images
 	int addMap(cv::Mat &depth, CameraInfo caminfo,
 			std::vector<cv::Mat> rgb = std::vector<cv::Mat>(3));
+
+	//-- Adding single images
 	int addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
-			float scaling, float maxcamdistance);
+			float scaling, float maxcamdistance, double time, double decayTime);
+
 	//-- Adding single image with depth noise information
 	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
-			const cv::Mat &rgb, float scaling, float maxcamdistance);
+			const cv::Mat &rgb, float scaling, float maxcamdistance, double time, double decayTime);
+
 	//Adding multiple images up to the next keyframe
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<std::vector<cv::Mat> > rgbImages = std::vector<std::vector<cv::Mat> >(),
 			volatile long int *poseNumber = NULL);
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<cv::Mat> rgbImages, volatile long int *poseNumber = NULL);
+
+	//-- Return current point cloud (vertices of the mesh)
 	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud();
+
+	//-- Meshing Methods
 	MeshSeparate getMeshSeparateMarchingCubes(MeshSeparate mesh = MeshSeparate(3));
 	MeshInterleaved getMeshInterleavedMarchingCubes(MeshInterleaved mesh = MeshInterleaved(3));
-//	MeshSeparate getMeshMarchingCubesNonindexed(MeshSeparate mesh = MeshSeparate(3));
 	MeshSeparate getMeshRecursive(MeshSeparate mesh = MeshSeparate(3));
-//	MeshSeparate getMeshRecursiveIncremental(MeshSeparate mesh = MeshSeparate(3));
-//	MeshSeparate getMeshMarchingCubesSlowOpenMP(MeshSeparate mesh);
 	MeshSeparate getMeshStructural(unsigned int structureType = 0,MeshSeparate mesh = MeshSeparate(4));
-//	MeshSeparate getMeshMarchingCubesApproximate(MeshSeparate mesh = MeshSeparate(3));
 	CellUpdate &getMeshCellsUpdate();
 	bool updateMeshes();
 	void updateMeshCellStructure();
@@ -162,13 +162,11 @@ public:
 	void startLoopClosure();
 	void catchLoopClosure();
 
-
 	void deleteOldLoopPoses();
 	void addNewLoopPoses();
 
 	void saveZimages();
 	void saveZimagesFull();
-//	void saveZimages(std::vector<volumetype> indices, std::string prefix);
 
 	void setThreadMeshing(bool threadMeshing);
 	void setDepthChecks(int depthchecks);
@@ -284,15 +282,6 @@ public:
 	typedef std::vector<LeafNeighborhood> LeafIndicesArray;
 #endif
 
-
-
-
-
-
-
-
-
-
 protected:
 
   void meshWrapperInterleaved(void);
@@ -318,41 +307,39 @@ protected:
 	// Mutex to block update of point cloud
 	std::mutex _pointCloudUpdate;
 
+	sidetype _bandwidth;
+	sidetype _brickLength;
+	sidetype _brickSize;
 
+	volumetype _nBranchesTotal;
+	volumetype _nLeavesTotal;
 
-  sidetype _bandwidth;
-  sidetype _brickLength;
-  sidetype _brickSize;
-
-  volumetype _nBranchesTotal;
-  volumetype _nLeavesTotal;
-
-  volumetype _nBranchesUsed;
-  volumetype _nLeavesUsed;
-  volumetype _nLeavesQueuedSurface;
-  volumetype _nLeavesQueuedFrustum;
+	volumetype _nBranchesUsed;
+	volumetype _nLeavesUsed;
+	volumetype _nLeavesQueuedSurface;
+	volumetype _nLeavesQueuedFrustum;
 	int3 _boxMin;
 	int3 _boxMax;
 
-  volumetype *_tree;
-  volumetype *_queueIndexOfLeaf;
-  volumetype *_leafNumberSurface;
-  volumetype *_leafNumberFrustum;
-  sidetype3  *_leafPos;
-  sidetype   *_leafScale;
+	volumetype *_tree;
+	volumetype *_queueIndexOfLeaf;
+	volumetype *_leafNumberSurface;
+	volumetype *_leafNumberFrustum;
+	sidetype3  *_leafPos;
+	sidetype   *_leafScale;
 
-  float      *_distance;
-  weighttype *_weights;
-  colortype3 *_color;
+	float      *_distance;
+	weighttype *_weights;
+	colortype3 *_color;
 
-  volumetype *_branchNumber;
-  uchar *_child;
+	volumetype *_branchNumber;
+	uchar *_child;
 
-  volumetype _nLeavesBeforeLastFrame;
+	volumetype _nLeavesBeforeLastFrame;
 
 	sidetype3 *_sharedBoxes;
-  bool _threaded;
-  bool _threadValid;
+	bool _threaded;
+	bool _threadValid;
 
 
 	int _imageWidth;
@@ -362,7 +349,7 @@ protected:
 	float *_pxp;
 	float *_pyp;
 
-
+	//-- Members for statistics
 	double _avgTimeQueueSurface;
 	double _avgTimeQueueFrustum;
 	double _avgTimeBricksSurface;
@@ -370,17 +357,14 @@ protected:
 	double _avgTimeMesh;
 	double _avgTimeSumMesh;
 	bool _verbose;
-
+	unsigned int _avgBricksUpdated;
+	unsigned int _avgBricksTracked;
 	volumetype _averageLeaves;
 
-
 	bool _performIncrementalMeshing;
-
-
 	class BudsAnchor{
 	public:
 		BudsAnchor(){
-//			fprintf(stderr,"\nCreating SubtreeAnchor");
 		subtreeBuds=NULL;subtreeBudsParentLeaf=NULL;leafBuds=NULL;}
 		std::vector<volumetype> *subtreeBuds;
 		std::vector<volumetype> *subtreeBudsParentLeaf;
@@ -441,20 +425,20 @@ protected:
 			,volumetype &_numberOfQueuedSubtrees
 			,volumetype _treeSizeSinceMeshing);
 
+	friend void queryOutdatedBricks(volumetype &_nLeavesQueued,
+			volumetype *_leafNumber,volumetype *_queueIndexOfLeaf, std::vector<volumetype> *outdatedMeshCells,
+			bool * _leafNumberIsOutdated);
+
 	BudsAnchor _newBudsSinceMeshingToQueue;
 	BudsAnchor _newBudsSinceMeshingToAccumulate;
 	BudsAnchor _newBudsSinceMeshingToClear;
 
-//	volumetype *_newSubtreesSinceMeshingToQueue;
-
-//	volumetype *_newSubtreesSinceMeshingToProcess;
-//	uchar *_newSubtreesSinceMeshingLevelsToQueue;
-//	uchar *_newSubtreesSinceMeshingLevelsToProcess;
 	volumetype _numberOfQueuedTreeBuds;
 	volumetype _numberOfQueuedLeafBuds;
 	volumetype _treeSizeSinceMeshing;
 	volumetype _treeSizeForMeshing;
 	bool _differentImageSize;
+
 	std::vector<bool> _leafIsQueuedForMeshing;
 	std::deque<volumetype> _leafQueueForMeshing;
 
@@ -463,6 +447,12 @@ protected:
 	std::list<size_t> _meshCellQueueOld;
 	std::list<size_t> _meshCellQueueCurrent;
 	std::list<size_t> _meshCellQueueNext;
+
+	//-- Members to tracked the updated mesh cells (and if they are older than threshold--> outdated)
+	std::vector<volumetype> _usedMeshCells;
+	std::vector<double> _latestUpdateTime;
+	std::vector<volumetype> _outdatedMeshCells;
+	bool *_leafNumberIsOutdated;
 
 	MeshCellArray _meshCellsSplit;
 	MeshCellArray _meshCellsCompact;
@@ -475,11 +465,6 @@ protected:
 	ParentArray _leafParent;
 
 	bool _interactiveMemoryManagement;
-
-//	std::vector<MeshCell> _meshCells;
-//	std::vector<MeshCellNeighborhood> _meshCellIndicesBranch;
-//	std::vector<LeafNeighborhood > _meshCellIndicesLeaf;
-//	std::vector<volumetype> _leafParent;
 
 	MCNSplit _boundary;
 	MCNCompact _boundaryCompact;
@@ -504,8 +489,6 @@ protected:
 	CellUpdate *_updateNext;
 
 	//Functions Variables for Loop Closure
-
-
 	bool _loopClosureLogging;
 	bool _loopClosureEnabled;
 	bool _loopClosureDone;
@@ -520,7 +503,6 @@ protected:
 	std::multimap<float,size_t> _posemap;
 	std::thread *_imageSaveThread;
 	std::thread *_loopClosureThread;
-
 
 	bool _loopClosureMode;
 	float *_weightsLoop;
@@ -542,7 +524,6 @@ protected:
 	unsigned int _meshingStartFrame;
 	double _meshTime;
 	std::vector<MeshStatistic> _meshTimes;
-
 
 	//Backwards Depth Consistency Check
 	size_t _numCheckImages;

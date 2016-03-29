@@ -3,6 +3,7 @@
  *
  *  Created on: Apr 15, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 #ifndef INLINE_FUNCTIONS_HPP_
