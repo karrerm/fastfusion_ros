@@ -36,6 +36,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("tracker_id",tracker_id_);				// Frame id of the pose measurement
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);						// Use ToF of RGBD
 	loadSuccess &= nodeLocal_.getParam("depth_noise",depth_noise_);				// Depth noise data is available
+	loadSuccess &= nodeLocal_.getParam("use_pcl_visualizer", use_pcl_visualizer_);// Use the pcl visualizer to show point cloud
 
 	//-- Read Camera to IMU transformation
 	XmlRpc::XmlRpcValue T_cam0_imu;
@@ -175,7 +176,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		ROS_INFO("\nFastfusion: Could read the parameters.\n");
 		//-- Configure fastfusion framework
 		onlinefusion_.setupFusion(threadFusion, threadMeshing,(float) imageScale_, (float) scale, (float) distThreshold,
-				saveMesh, fileLocation);
+				saveMesh, fileLocation, use_pcl_visualizer_);
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
@@ -183,6 +184,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 		//-- Waiting for onlinefusion to be setup
 	}
 }
+
 
 void FastFusionWrapper::run() {
 	ROS_INFO("\nRun Fastfusion .....");
@@ -258,6 +260,7 @@ void FastFusionWrapper::run() {
 	ros::shutdown();
 }
 
+
 void FastFusionWrapper::jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, const float min, const float max) {
 //-- Compute colored image according to the jet colormap based on the noise level. The parameters min and max define the
 //-- limits of the noise. Min corresponds to blue, max to red. Values that are lower than min are set to min, values that are
@@ -282,6 +285,7 @@ void FastFusionWrapper::jetColorNoise(const cv::Mat &imgNoise, cv::Mat *imgRGB, 
 		}
 	}
 }
+
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf,
@@ -354,6 +358,7 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 	}
 }
 
+
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf) {
 //-- Callbackfunction for the use of the ToF camera. Assumes 16 bit input depth image.
@@ -421,7 +426,6 @@ void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgD
 }
 
 
-
 void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected) {
 //-- Function to apply the polynomial depth correction model to correct for systematic depth errors.
 	//-- Get the parameters (intrinsics)
@@ -451,6 +455,7 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 		}
 	}
 }
+
 
 void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg) {
 //-- Callback for colored point cloud (as published by the RealSense Sensor
@@ -516,7 +521,6 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 }
 
 
-
 void FastFusionWrapper::imageCallback(const sensor_msgs::ImageConstPtr& msgRGB, 
 										const sensor_msgs::ImageConstPtr& msgDepth) {
 //-- Callback function to receive depth image with corresponding RGB frame as ROS-Messages
@@ -568,10 +572,12 @@ void FastFusionWrapper::getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& 
 	cv::resize(rgbImg2,*rgbImg,cv::Size(480,360),cv::INTER_LINEAR);
 }
 
+
 void FastFusionWrapper::getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg) {
 //-- Function to convert ROS-image (Confidence) message to OpenCV-Mat.
 	*confImg = cv_bridge::toCvCopy(msgConf, sensor_msgs::image_encodings::TYPE_8UC1)->image;
 }
+
 
 void FastFusionWrapper::getDepthImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgDepth, cv::Mat *depthImg) {
 //-- Function to convert ROS-image(depth) message to OpenCV-Mat.
@@ -582,6 +588,7 @@ void FastFusionWrapper::getNoiseImageFromRosMsg(const sensor_msgs::ImageConstPtr
 //-- Function to convert ROS-image (noise) message to OpenCV-Mat.
 	*noiseImg = cv_bridge::toCvCopy(msgNoise, sensor_msgs::image_encodings::TYPE_32FC1)->image;
 }
+
 
 void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 //-- Function used to broadcast the necessary tf-transformations to complete the chain between origin

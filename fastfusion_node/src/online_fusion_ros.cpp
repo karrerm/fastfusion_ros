@@ -52,9 +52,6 @@ OnlineFusionROS::OnlineFusionROS(bool createMeshList):
 	pointIsClicked = false;
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
-	_meshCounter = 0;
-	//_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
-	//-- Create Visualization Thread
 }
 
 OnlineFusionROS::~OnlineFusionROS()
@@ -119,21 +116,23 @@ void OnlineFusionROS::stop() {
 	}
 
 	//-- End Visualization Thread
-	//viewer->close();
-	//_visualizationThread->join();
-	//while (_update);
-	//delete _visualizationThread;
+	if (_use_pcl_visualizer){
+		//viewer->close();
+		_visualizationThread->join();
+		while (_update);
+		delete _visualizationThread;
+	}
 }
 
 bool OnlineFusionROS::startNewMap() {
 //-- Start a new map, only if initialization was performed before. Also Check if currently a process is running.  If any
 //-- of these conditions is not met, return false
 	//-- Check if a FusionMipMapCPU object exists
-	//delete _fusion;
-	//_fusion = NULL;
 	if (_fusion || !_isSetup) {
 		return false;
 	}
+
+	//-- Empty Queues
 	if (!_queueDepth.empty()) {
 		std::queue<cv::Mat> empty;
 		std::swap( _queueDepth, empty );
@@ -154,18 +153,24 @@ bool OnlineFusionROS::startNewMap() {
 		std::queue<double> empty;
 		std::swap( _queueTime, empty );
 	}
+
+	//-- Setup viewer if necessary
+	if (_use_pcl_visualizer) {
+		_visualizationThread = new std::thread(&OnlineFusionROS::visualize, this);
+	}
+
+	//-- Setup new fusion object and configure it
 	_fusion = new FusionMipMapCPU(_offset.x,_offset.y,_offset.z,_scale, _distThreshold,0,true);
 	_fusion->setThreadMeshing(_threadMeshing);
 	_fusion->setIncrementalMeshing(true);
 	_fusionActive = true;
-//	_fusionAlive = true;
 	_update = false;
 	_runFusion = true;
 	return true;
 }
 
 void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
-								bool saveMesh, std::string fileName){
+								bool saveMesh, std::string fileName, bool usePclVisualizer){
 //-- Initialize FusionMipMapCPU-class (_fusion)
 	_imageDepthScale = imageScale;
 	_scale = scale;
@@ -176,6 +181,7 @@ void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float im
 	_fileName = fileName;
 	_isSetup = true;
 	_offset.x = _offset.y = _offset.z = 0.0f;
+	_use_pcl_visualizer = usePclVisualizer;
 	//startNewMap();
 }
 
@@ -319,34 +325,21 @@ void OnlineFusionROS::visualize() {
 	//-- Initialize PCL-Viewer
 	double linewidth = 3.0;
 	bool pointcloudInit = false;
-	//-- Set Camera Viewing Parameters
-	pcl::visualization::Camera camera;
-	camera.focal[0] = -0.365056; camera.focal[1] = -0.026536; camera.focal[2] = -0.0145319;
-	camera.pos[0] = -0.160066; camera.pos[1] = -0.540765; camera.pos[2] = 0.599112;
-	camera.view[0] = -0.336011; camera.view[1] = 0.663623; camera.view[2] = 0.668357;
-	camera.clip[0] = 0.00431195; camera.clip[1] = 4.31195;
-	camera.fovy = 0.8575;
-	camera.window_size[0] = 1600; camera.window_size[1] = 1200;
-	camera.window_pos[0] = 0; camera.window_pos[1] = 0;
 
-	std::vector<pcl::visualization::Camera> cameras;
-
+	//-- Setup the visualizer
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("visualization pc"));
-	viewer->setCameraParameters(camera,0);
 	viewer->setShowFPS (false);
 	viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 30);
-	viewer->registerPointPickingCallback(&OnlineFusionROS::pointPickCallback, *this);
 	viewer->addCoordinateSystem (1);
-	viewer->addSphere(cameraCenter_,0.1,1.0,0.0,0.0,"camerCenter",0);
-	//viewer->initCameraParameters ();
 
+	//-- Prepare camera parameters
 	cv::Mat K_cv,Ext_cv, R_cv,t_cv;
 	Eigen::Matrix4f Ext;
 	Eigen::Matrix3f K,R;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr camera_ptr (new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointXYZ camPointTemp;
+
 	//-- Define Cornerpoints for camera frustum
-	//Eigen::Vector3f tl1,tr1,br1,bl1,c1,t;
 	cameraFrustum_.tl0 << -0.24,-0.17,0.4;
 	cameraFrustum_.tr0 << 0.24,-0.17,0.4;
 	cameraFrustum_.br0 << 0.24,0.17,0.4;
@@ -355,229 +348,52 @@ void OnlineFusionROS::visualize() {
 
     while ((!viewer->wasStopped ()) && _runVisualization) {
     	viewer->spinOnce (10);
-    	//viewer->setCameraParameters(camera,0);
-    	//viewer->setCameraParameters(camera,0);
     	//-- Get Extrinsics
     	R_cv = _currentPose.getRotation();
     	t_cv = _currentPose.getTranslation();
     	drawCameraFrustum(viewer, R_cv, t_cv);
-    	viewer->updateSphere(cameraCenter_,0.1,1.0,0.0,0.0,"camerCenter");
 
-    	/*
-    	switch (numberClickedPoints) {
-    	case 1:
-    		viewer->removeShape("point0",0);
-    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
-    		break;
-    	case 2:
-    		viewer->removeShape("point0",0);
-    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
-    		viewer->removeShape("point1",0);
-    		viewer->addSphere(clickedPoints[1],0.05,1.0,0.0,0.0,"point1",0);
-    		break;
-    	case 3:
-    		viewer->removeShape("point0",0);
-    		viewer->addSphere(clickedPoints[0],0.05,1.0,0.0,0.0,"point0",0);
-    		viewer->removeShape("point1",0);
-    		viewer->addSphere(clickedPoints[1],0.05,1.0,0.0,0.0,"point1",0);
-    		viewer->removeShape("point2",0);
-    		viewer->addSphere(clickedPoints[2],0.05,1.0,0.0,0.0,"point2",0);
-    		break;
-    	case 0:
-    		viewer->removeShape("point0",0);
-    		viewer->removeShape("point1",0);
-    		viewer->removeShape("point2",0);
-    		break;
-    	}
-    	if (pointIsClicked) {
-    	    		pointIsClicked = false;
-    		if (sphereIsInitialized) {
-    			std::cout << "Actualize Cube " << std::endl;
-    			viewer->removeShape("cube",0);
-    			viewer->addCube(cubePos,cubePose, cubeSideLength, cubeSideLength, cubeSideLength, "cube", 0);
-    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"cube",0);
-    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0,0.0,1.0,"cube",0);
-    			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
-    		} else {
-    			sphereIsInitialized = true;
-    			viewer->addCube(cubePos,cubePose, cubeSideLength, cubeSideLength, cubeSideLength, "cube", 0);
-    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH,linewidth,"cube",0);
-    			viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR,0.0,0.0,1.0,"cube",0);
-    			//viewer->addSphere(clickedPoint,0.1,1.0,0.0,0.0,"sphere",0);
-    		}
-    	}
-		*/
-
-    	//-- Set Camera viewpoint
-    	/*
-    	viewer->setCameraPosition(t_cv.at<double>(0,0)-R_cv.at<double>(0,2)*2.5,t_cv.at<double>(1,0)-R_cv.at<double>(1,2)*2.5,
-    			t_cv.at<double>(2,0)-R_cv.at<double>(2,2)*2.5,t_cv.at<double>(0,0)+R_cv.at<double>(0,3),t_cv.at<double>(1,0)+R_cv.at<double>(1,2),
-				t_cv.at<double>(2,0)+R_cv.at<double>(2,2),0,0,1,0);
-		*/
-    	//-- Check whether the point cloud should be updated (only every 20 Frames!)
-
+    	//-- Check if point cloud should be updated
     	if(_update) {
-    		//-- Lock Data queue
-
-    		//std::lock_guard<std::mutex> updateLock(_visualizationUpdateMutex);
-    		pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_ptr (new pcl::PointCloud<pcl::PointXYZRGB>);
-    		pcl::PointXYZRGB pointTemp;
-    		std::vector<pcl::Vertices>  polygons;
-    		pcl::Vertices tempFace;
-    		//-- Generate Point cloud from vertexes (!!! O(n)-operation !!!)
-    		//std::cout << "Size of current point cloud = " << _currentPointCloud->size() << std::endl;
-    		/*//-- Not needed since parallel updated in fusion
-     		for (unsigned int i = 0; i < _currentMeshInterleaved->vertices.size(); i++ ) {
-    			pointTemp.x = _currentMeshInterleaved->vertices[i].x;
-    			pointTemp.y = _currentMeshInterleaved->vertices[i].y;
-    			pointTemp.z = _currentMeshInterleaved->vertices[i].z;
-    			pointTemp.r = _currentMeshInterleaved->colors[i].r;
-    			pointTemp.g = _currentMeshInterleaved->colors[i].g;
-    			pointTemp.b = _currentMeshInterleaved->colors[i].b;
-    			point_cloud_ptr->points.push_back (pointTemp);
-    		}
-			*/
-     		/*
-    		for (unsigned int i = 0; i < _currentMeshInterleaved->faces.size();i+= _currentMeshInterleaved->_verticesPerFace){
-    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+0]);
-    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+1]);
-    			tempFace.vertices.push_back(_currentMeshInterleaved->faces[i+2]);
-    			polygons.push_back(tempFace);
-    			tempFace.vertices.clear();
-    		}
-			*/
-
-    		//updateLock.unlock();
-
-
-    		/*
-    		pcl::PolygonMesh triangles;
-    		pcl::PCLPointCloud2 msg;
-    		pcl::toPCLPointCloud2 (*point_cloud_ptr, msg);
-    		triangles.cloud = msg;
-    		triangles.polygons = polygons;
-    		*/
     		//-- Update Viewer
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
+    		std::cout << "There are: " << points_ptr->size() << " Points in the model" << std::endl;
     		if (points_ptr->points.size() > 0) {
-    			std::string modelName = "/home/karrer/PointClouds/Models/Model" + std::to_string(_modelCounter)  + ".ply";
-    			pcl::io::savePLYFile(modelName,*points_ptr);
-    			_modelCounter++;
-
-    		//-- KdTree for NN-search
-    		/*
-    		std::clock_t begin = std::clock();
-    		pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
-    		kdtree.setInputCloud (points_ptr);
-    		//-- Search nearest Point
-    		pcl::PointXYZRGB searchPoint;
-    		searchPoint.x = 1.0; searchPoint.y = 2.1; searchPoint.z = 0; searchPoint.r = 1; searchPoint.g = 0; searchPoint.b = 0;
-    		std::vector<int> pointIdxNKNSearch(5);
-    		std::vector<float> pointNKNSquaredDistance(5);
-    		kdtree.nearestKSearch (searchPoint, 5, pointIdxNKNSearch, pointNKNSquaredDistance);
-    		std::clock_t end = std::clock();
-    		double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
-    		std::cout << "Time for kd-tree: " << elapsed_secs << std::endl;
-			*/
-    		if (pointcloudInit) {
-    			//viewer->updatePointCloud(point_cloud_ptr,"visualization pc");
-    			viewer->updatePointCloud(points_ptr,"visualization pc");
-    			/*if (_saveScreenshot) {
-    			viewer->saveScreenshot("/home/karrer/Desktop/fbf_video/pointCloud.png");
-    			_saveScreenshot = false;
-    			}*/
-    			// Mesh visualization --> slow
-    			//viewer->removePolygonMesh("visualization pc");
-    			//viewer->addPolygonMesh(triangles,"visualization pc");
-    		} else {
-    			std::cout << "Crashes before adding point cloud " << std::endl;
-    			//viewer->addPointCloud(point_cloud_ptr, "visualization pc");
-    			viewer->addPointCloud(points_ptr, "visualization pc");
-    			// Mesh visualization --> slow
-    			//viewer->addPolygonMesh(triangles,"visualization pc");
-    			pointcloudInit = true;
-    		}
+				//-- KdTree for NN-search
+				/*
+				std::clock_t begin = std::clock();
+				pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
+				kdtree.setInputCloud (points_ptr);
+				//-- Search nearest Point
+				pcl::PointXYZRGB searchPoint;
+				searchPoint.x = 1.0; searchPoint.y = 2.1; searchPoint.z = 0; searchPoint.r = 1; searchPoint.g = 0; searchPoint.b = 0;
+				std::vector<int> pointIdxNKNSearch(5);
+				std::vector<float> pointNKNSquaredDistance(5);
+				kdtree.nearestKSearch (searchPoint, 5, pointIdxNKNSearch, pointNKNSquaredDistance);
+				std::clock_t end = std::clock();
+				double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+				std::cout << "Time for kd-tree: " << elapsed_secs << std::endl;
+				*/
+				if (pointcloudInit) {
+					viewer->updatePointCloud(points_ptr,"visualization pc");
+				} else {
+					viewer->addPointCloud(points_ptr, "visualization pc");
+					pointcloudInit = true;
+				}
     		}
             _update = false;
-
-            point_cloud_ptr->clear();
-            //polygons.clear();
         }
-    	viewer->getCameras(cameras);
     }
     viewer->removePointCloud("visualization pc",0);
     viewer->close();
-    //-- Output the last camera parameters
-    std::cout << " \n \n \n";
-    std::cout << "----- All Camera View Parameters --------" << std::endl;
-    std::cout << "camera.focal[0] = " << cameras[0].focal[0] << "; camera.focal[1] = " << cameras[0].focal[1] << "; camera.focal[2] = " << cameras[0].focal[2] << ";" << std::endl;
-    std::cout << "camera.pos[0] = " << cameras[0].pos[0] << "; camera.pos[1] = " << cameras[0].pos[1] << "; camera.pos[2] = " << cameras[0].pos[2] <<";" << std::endl;
-    std::cout << "camera.view[0] = " << cameras[0].view[0] << "; camera.view[1] = " << cameras[0].view[1] << "; camera.view[2] = " << cameras[0].view[2] <<";"<< std::endl;
-    std::cout << "camera.clip[0] = " << cameras[0].clip[0] << "; camera.clip[1] = " << cameras[0].clip[1] << ";" << std::endl;
-    std::cout << "camera.fovy = " << cameras[0].fovy << ";" <<std::endl;
-    std::cout << "camera.window_size[0] = " << cameras[0].window_size[0] << "; camera.window_size[1] = " << cameras[0].window_size[1] << ";" << std::endl;
-    std::cout << "camera.window_pos[0] = " << cameras[0].window_pos[0] << "; camera.window_pos[1] = " << cameras[0].window_pos[1] << ";" << std::endl;
-}
-
-
-void OnlineFusionROS::pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*){
-	if (event.getPointIndex () == -1) {
-		return;
-	}
-	if (numberClickedPoints <= 3) {
-		std::cout << "Adding Points" << std::endl;
-		pcl::PointXYZ clickedPoint;
-		event.getPoint(clickedPoint.x,clickedPoint.y,clickedPoint.z);
-		clickedPoints.push_back(clickedPoint);
-		numberClickedPoints++;
-		/*
-		if (numberClickedPoints == 3) {
-			//-- Estimate Plane and Dimensions of Cube
-			cubeSideLength = std::sqrt((clickedPoints[0].x-clickedPoints[1].x) + (clickedPoints[0].y-clickedPoints[1].y) +
-					(clickedPoints[0].z-clickedPoints[1].z));
-			std::cout << "Cube Length = " << cubeSideLength << std::endl;
-			Eigen::Vector3f x_axis, y_axis, z_axis, temp_vec;
-			for (int i = 0; i< 3; i++) {
-				std::cout << "point("<< i+1 << ") = [" << clickedPoints[i].x << "; " << clickedPoints[i].y << "; " <<
-						clickedPoints[i].z << "];" << std::endl;
-			}
-
-			x_axis(0) = (float)(clickedPoints[1].x - clickedPoints[0].x);
-			x_axis(1) = (float)(clickedPoints[1].y - clickedPoints[0].y);
-			x_axis(2) = (float)(clickedPoints[1].z - clickedPoints[0].z);
-			x_axis.normalize();
-			temp_vec(0) = clickedPoints[2].x - clickedPoints[0].x;
-			temp_vec(1) = clickedPoints[2].y - clickedPoints[0].y;
-			temp_vec(2) = clickedPoints[2].z - clickedPoints[0].z;
-			z_axis = x_axis.cross(temp_vec);
-			z_axis.normalize();
-			y_axis = x_axis.cross(z_axis);
-			y_axis.normalize();
-			Eigen::Matrix3f R;
-			R << x_axis, y_axis, z_axis;
-			std::cout << "R = " << R <<std::endl;
-			if (R.determinant() < 0) {
-				R.col(2) = R.col(2)*(-1);
-			}
-			cubePose = R;
-			cubePos(0) = clickedPoints[0].x; //+ cubeSideLength/2.0f * (x_axis(0) + y_axis(0) + z_axis(0));
-			cubePos(1) = clickedPoints[0].y; // + cubeSideLength/2.0f * (x_axis(1) + y_axis(1) + z_axis(1));
-			cubePos(2) = clickedPoints[0].z; // + cubeSideLength/2.0f * (x_axis(2) + y_axis(2) + z_axis(2));
-
-			numberClickedPoints = 0;
-			clickedPoints.clear();
-			pointIsClicked = true;
-		}
-		*/
-	}
 }
 
 
 void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp) {
-//-- Adapted version of the updateSlot()-function in order to process the current images.
+//-- Interface with fusion member which allows to query new depth data without noise information
 	if (!_threadFusion) {
-	//-- Unthreaded Fusion
+	//-- Not threaded Fusion
 		_fusionActive = true;
 		_frameCounter++;
 		_isReady = false;
@@ -599,22 +415,9 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		//-- Generate new Mesh
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		}
-		/*if (_frameCounter > 1) {
+		if (_frameCounter > 10) {
 			_update = true;
-			_frameCounter = 0;
-			std::string saveName = "/home/karrer/IROS2016/Evaluation/UAV_Mesh/Meshes/mesh_" + std::to_string(_meshCounter);
-			_currentMeshInterleaved->writePLY(saveName,false);
-			std::string saveNameTrans = "/home/karrer/IROS2016/Evaluation/UAV_Mesh/Transforms/transform_" + std::to_string(_meshCounter) + ".txt";
-			std::ofstream file(saveNameTrans);
-			file.precision(12);
-			if (file.is_open())
-			{
-				file << "timestamp:\n" << timestamp << std::endl;
-				file << "Transform: \n" << pose.getExtrinsic();
-				file.close();
-			}
-			_meshCounter++;
-		}*/
+		}
 		_isReady = true;
 		_fusionActive = false;
 	} else {
@@ -625,6 +428,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			_runFusion = true;
 		}
 		_currentPose = pose;
+
 		//-- Lock and update data-queue
 		{
 		std::unique_lock<std::mutex> updateLock(_fusionUpdateMutex);
@@ -636,7 +440,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		_newDataInQueue = true;
 		_fusionThreadCondition.notify_one();
 		}
-		//updateLock.unlock();
+
 		_frameCounter++;
 		//--Update Mesh
 		if(_newMesh){
@@ -646,15 +450,12 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
-			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
 			} // visualization scope end
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter > 60) {
+		if (_frameCounter > 10) {
+			//-- Only update visualization after 10 frames fused
 			_update = true;
-			//std::string saveName = "/home/karrer/PartialMeshes/mesh" + std::to_string(_meshCounter) + ".ply";
-			//_currentMeshInterleaved->writePLY(saveName,false);
-			//_meshCounter++;
 		}
 	}
 }
@@ -685,23 +486,9 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 		//-- Generate new Mesh
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
 		}
-		//-- Check whether to update Visualization
-		/*if (_frameCounter > 1) {
+		if (_frameCounter > 10) {
 			_update = true;
-			_frameCounter = 0;
-			std::string saveName = "/home/karrer/IROS2016/Evaluation/SubmeshViews/Meshes/mesh_" + std::to_string(_meshCounter) + ".ply";
-			_currentMeshInterleaved->writePLY(saveName,false);
-			std::string saveNameTrans = "/home/karrer/IROS2016/Evaluation/SubmeshViews/Transforms/transform_" + std::to_string(_meshCounter) + ".txt";
-			std::ofstream file(saveNameTrans);
-			file.precision(12);
-			if (file.is_open())
-			{
-				file << "timestamp:\n" << timestamp << std::endl;
-				file << "Transform: \n" << pose.getExtrinsic();
-				file.close();
-			}
-			_meshCounter++;
-		}*/
+		}
 		_isReady = true;
 		_fusionActive = false;
 	} else {
@@ -733,12 +520,11 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
-			//pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
 			}
-			//updateLockVis.unlock();
 		}
 		//-- Check whether to update Visualization
-		if (_frameCounter > 3) {
+		if (_frameCounter > 10) {
+			//-- Only update visualization after fusing 10 frames
 			_update = true;
 		}
 	}

@@ -109,6 +109,7 @@ protected:
 	bool testing_point_cloud_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrameTrans_;
+	bool use_pcl_visualizer_;
 
 	//-- Decay Time for the use with time-window based reconstruction
 	double decayTime_;

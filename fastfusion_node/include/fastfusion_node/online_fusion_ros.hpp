@@ -9,31 +9,26 @@
 
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
-#include "camerautils/camerautils.hpp"
-
-#include <boost/thread/thread.hpp>
+#include <camerautils/camerautils.hpp>
+#include <auxiliary/multivector.h>
+//#include <boost/thread/thread.hpp>
+//-- PCL includes
 #include <pcl/common/common_headers.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/point_picking_event.h>
-
 #include <pcl/PolygonMesh.h>
 #include <pcl/PCLPointCloud2.h>
 #include <pcl/Vertices.h>
-
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
 #include <pcl/PCLPointCloud2.h>
 #include <pcl/conversions.h>
 #include <pcl_ros/transforms.h>
-
 //-- KdTree for NN-search
 #include <pcl/search/kdtree.h>
 #include <pcl/kdtree/kdtree_flann.h>
-
-
-#include <auxiliary/multivector.h>
 
 #include <opencv2/opencv.hpp>
 #include <omp.h>
@@ -42,7 +37,6 @@
 #include <string>
 #include <fstream>
 #include <sstream>
-
 #include <queue>
 
 //-- Dirty Trick to get rid of compiler error:
@@ -67,8 +61,6 @@
 #define USE_ORIGINAL_VOLUME 1
 
 #include <fusion/definitions.h>
-
-
 #include <deque>
 #include <list>
 #include <thread>
@@ -80,49 +72,62 @@
 class OnlineFusionROS
 {
 public:
+	//-- Constructor and Destructor
 	OnlineFusionROS(bool createMeshList = false);
 	~OnlineFusionROS();
+
 	//-- Initialization of the parameters read from the ROS parameter file
 	void setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
-			   bool saveMesh, std::string fileName);
+			   bool saveMesh, std::string fileName, bool usePclVisualizer);
+
+	//-- Starting new Map
+	bool startNewMap();
+
+	//-- Members related to Meshing
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
 	MeshInterleaved *_currentMeshInterleaved;
 	std::vector<PointerMeshDraw*> _pointermeshes;
+
+	//-- The actual fusion member
 	FusionMipMapCPU* _fusion;
+
+	//-- Depth image scale and maximal distance for the reconstruction
 	float _imageDepthScale;
 	float _maxCamDistance;
 
+	//-- Checking Members
 	bool _newMesh;
 	bool _fusionActive;
 	bool _fusionAlive;
-
-	bool _saveScreenshot;
-
-	bool _threadImageReading;
-
-	//-- Starting new Map
-	bool startNewMap();
-	float _scale;
-	float _distThreshold;
-	bool _threadMeshing;
-//-- Update Fusion
-	// No Noise Data available
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
-	// With Noise Data
-	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
-
-	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud() {
-			return _fusion->getCurrentPointCloud();
-	};
+	bool _saveScreenshot;		// unused
+	bool _threadImageReading;	// unused
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
 	bool isAlive(){ return _fusionAlive;};
+
+	//-- Properties for the fusion
+	float _scale;				// Voxel size at highest res.
+	float _distThreshold;		// Truncation length
+	bool _threadMeshing;		// Thread the meshing? (if not threaded->slow)
+
+	//-- Update without noise data
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
+
+	//-- Update with Noise Data
+	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
+
+	//-- Get the current point cloud (vertices of the current mesh)
+	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud() {
+		return _fusion->getCurrentPointCloud();
+	};
+
+	//-- Information of the current model
 	int _frameCounter, _modelCounter;
 	CameraInfo _currentPose;
 	cv::Mat _currentDepthImg;
-
 	pcl::PointXYZ cameraCenter_;
+
 	//-- Function to stop the fusion
 	void stop();
 
@@ -134,11 +139,12 @@ protected :
 	std::thread * _visualizationThread;
 	bool _update;
 	bool _runVisualization;
+	bool _use_pcl_visualizer;
 	std::mutex _visualizationUpdateMutex;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> simpleVis (pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
 	void drawCameraFrustum(boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer, cv::Mat &R, cv::Mat &t);
-	//
+
 	void pointPickCallback(const pcl::visualization::PointPickingEvent& event, void*);
 	bool pointIsClicked, sphereIsInitialized;
 	std::vector<pcl::PointXYZ> clickedPoints;
@@ -147,7 +153,6 @@ protected :
 	Eigen::Vector3f cubePos;
 	Eigen::Quaternionf cubePose;
 
-int _meshCounter;
 	//-- Fusion Thread Members
 	bool _threadFusion;
 	std::thread * _fusionThread;
@@ -163,6 +168,7 @@ int _meshCounter;
 	void fusionWrapperROS(void);
 	bool _isReady;
 	float3 _offset;
+
 	//-- Meshing Members
 	std::vector<PointerMeshDraw*> _meshesDraw;
 	PointerMeshDraw *_currentMesh;
@@ -175,9 +181,7 @@ int _meshCounter;
 	bool _saveMesh;
 	std::string _fileName;
 
-
-
-	//-- Probably unused variables (maybe can get rid of them)
+	//-- Unused Variables (taken from original fastfusion...)
 	long long _lastComputedFrame;
 	bool _verbose;
 	bool _showCameraFrustum;
@@ -185,15 +189,12 @@ int _meshCounter;
 	bool _showDepthImage;
 	bool _showColor;
 	int _displayMode;
-
 	unsigned int _vertexBufferSize;
 	unsigned int _faceBufferSize;
 	unsigned int _edgeBufferSize;
-
 	bool _onTrack;
 	bool _onInterpolation;
 	bool _saving;
-
 	bool _runFusion;
 	bool _createMeshList;
 	bool _lightingEnabled;
@@ -201,7 +202,6 @@ int _meshCounter;
 	struct cameraFrustum{
 		Eigen::Vector3f tl0,tr0,br0,bl0,c0;
 	} cameraFrustum_;
-
 };
 
 #endif /* INCLUDE_ONLINE_FUSION_ROS_HPP_ */

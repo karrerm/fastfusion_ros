@@ -10,7 +10,7 @@ threadFusion : true
 threadMeshing : true
 
 # Scales
-imageScale : 1000.0
+imageScale : 5000.0
 scale : 0.009
 distanceThreshold : 0.03
 
@@ -21,15 +21,18 @@ fileLocation : /home/karrer/forPaper
 # TF Id's
 world_id : /world
 tracker_id : /body
-cam_id : /realsense_frame
+cam_id : /depth
 
 # Use time-window based reconstruction
 # Set decay_time to value <= 0.0 to achieve full reconstruction,
 # otherwise the defined time window (decay_time) is used
-decay_time : -1.0
+decay_time : 3.0
 
 # Define if using Time of flight sensor or not
-use_pmd : false
+use_pmd : true
 
 # Define if want to use Noise Data (only use with use_pmd = true)
 depth_noise: true
+
+# Want to use pcl visualizer (e.g. when performing global reconstruction)
+use_pcl_visualizer : true
