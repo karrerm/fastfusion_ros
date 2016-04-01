@@ -15,8 +15,7 @@
 /*
  * ROS-Node including the fastfusion mapping algorithm presented in
  * "Volumetric 3D Mapping in Real-Time on a CPU (Steinbrücker,Sturm, Cremers).
- * The node assumes a SLAM node is active publishing image,
- * and pose messages (e.g. slam_simulation_node for benchmark datasets).
+ * The node assumes depth and pose data is available
  */
 int main(int argc, char **argv)
 {

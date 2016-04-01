@@ -4,24 +4,32 @@
 	
 	<!-- Run Bagfile -->
      <node pkg="rosbag" type="play" name="player" output="screen"   
-      args="-r 2.0 /home/karrer/Desktop/Dataset3/2016_Jan_09/Picoflexx/Desk/Mode1/desk_mode1_run1.bag" />
+      args="-r 1.0 /home/karrer/FinalDataSet/2016_Feb_12/Picoflexx/Desk/Mode1/desk_mode1_3.bag --clock"/> 
+      <!--/home/karrer/FinalDataSet/2016_Feb_11/Picoflexx/Boiler/boiler_mode1_oneside2.bag" -->
       
-	<!-- Run rovio -->
-     <node  name="rovio" pkg="rovio" type="rovio_node"     
-     clear_params="true" output="screen" > 
-     </node>
-
+	<!-- Run Okvis -->
+    <node name="okvis_node" pkg="okvis_ros" type="okvis_node" output="screen">
+    	<param name="config_filename" value="$(find okvis_ros)/okvis/config/marcoMono2.yaml" />
+    	<remap from="/camera0" to="/cam0/image_raw" />
+		<!--remap from="/calibration0" to="/cam0/calibration" -->
+    	<!--remap from="/calibration1" to="/cam1/calibration" -->
+    	<remap from="/imu" to="/imu0" />
+  	</node>
 
 	<!-- Run fastfusion_node-->
-
 	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen" >
 		<remap from="image_depth"		to="$(arg slam_name)/depth/image_raw" />
 		<remap from="image_conf"		to="$(arg slam_name)/confidence/image_raw" />
 		<remap from="image_noise" 		to="$(arg slam_name)/noise/image_raw" />
+		<remap from="rovio_odometry"	to="/rovio/odometry" />
+		<remap from="point_cloud" 		to="/euroc6/camera/depth/points" />
 
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
- 	<rosparam file="$(find fastfusion_node)/cfg/camchain_pico.yaml"/>
+ 	<rosparam file="/home/karrer/FinalDataSet/2016_Feb_12/Picoflexx/Rig_Calibration/run2/calibration_params.yaml"/>
+ 	<!--rosparam file="$(find fastfusion_node)/cfg/camchain_realsense.yaml"-->
+ 	<!--rosparam file="/home/karrer/FinalDataSet/Copter/10_02_16/Calibration/run1/calibration_params.yaml"-->
+ 	<!--rosparam file="$(find fastfusion_node)/cfg/camchain_realsenseCopter.yaml"-->
 	</node>
 	
 	

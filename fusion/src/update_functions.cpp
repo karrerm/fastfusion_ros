@@ -3,6 +3,7 @@
  *
  *  Created on: May 5, 2013
  *      Author: steinbrf
+ *      Edited: karrerm
  */
 
 
@@ -1211,7 +1212,6 @@ void update8AddLoopAVXSingleInteger
 //	float pxx, pxy, pxz, pyx, pyy, pyz, pzx, pzy, pzz;
 	float pyx, pyy, pyz, pzx, pzy, pzz;
 
-
 	float d11 = m11*fleafScale;
 	float d21 = m21*fleafScale;
 	float d31 = m31*fleafScale;
@@ -1219,8 +1219,8 @@ void update8AddLoopAVXSingleInteger
 	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
 	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
 	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
-  __m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);
-  __m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
+	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);
+	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
 
 	float d12 = m12*fleafScale;
 	float d22 = m22*fleafScale;
@@ -1234,8 +1234,6 @@ void update8AddLoopAVXSingleInteger
 	for(int z=0;z<8;z++,pzx+=d13,pzy+=d23,pzz+=d33){
 		pyx=pzx;pyy=pzy;pyz=pzz;
 		for(int y=0;y<8;y++,pyx+=d12,pyy+=d22,pyz+=d32){
-
-
 			volumetype idx = threadOffset; threadOffset+=8;
 			__m256 pxx_AVX =  _mm256_add_ps(_mm256_set1_ps(pyx),d11_AVX);
 			__m256 pxy_AVX =  _mm256_add_ps(_mm256_set1_ps(pyy),d21_AVX);
@@ -1261,7 +1259,8 @@ void update8AddLoopAVXSingleInteger
 							 _mm256_max_epi32(_mm256_min_epi32(imy,_mm256_set1_epi32(imageHeight-1)),_mm256_setzero_si256())),
 								 _mm256_max_epi32(_mm256_min_epi32(imx,_mm256_set1_epi32(imageWidth-1)),_mm256_setzero_si256())));
 
-			ALIGNED float h8[8] = {
+			 //-- Depth Values
+			 ALIGNED float h8[8] = {
 					(float)(depth[imageIndex[0]]),
 					(float)(depth[imageIndex[1]]),
 					(float)(depth[imageIndex[2]]),
@@ -1271,8 +1270,8 @@ void update8AddLoopAVXSingleInteger
 					(float)(depth[imageIndex[6]]),
 					(float)(depth[imageIndex[7]])};
 
-
-			ALIGNED float rInc8[8] = {
+			 //-- Incremental Color Values (from RGB frame)
+			 ALIGNED float rInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+2]),
 					(float)(rgb[imageIndex[1]*3+2]),
 					(float)(rgb[imageIndex[2]*3+2]),
@@ -1281,7 +1280,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[5]*3+2]),
 					(float)(rgb[imageIndex[6]*3+2]),
 					(float)(rgb[imageIndex[7]*3+2])};
-			ALIGNED float gInc8[8] = {
+			 ALIGNED float gInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+1]),
 					(float)(rgb[imageIndex[1]*3+1]),
 					(float)(rgb[imageIndex[2]*3+1]),
@@ -1290,7 +1289,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[5]*3+1]),
 					(float)(rgb[imageIndex[6]*3+1]),
 					(float)(rgb[imageIndex[7]*3+1])};
-			ALIGNED float bInc8[8] = {
+			 ALIGNED float bInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+0]),
 					(float)(rgb[imageIndex[1]*3+0]),
 					(float)(rgb[imageIndex[2]*3+0]),
@@ -1300,7 +1299,8 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[6]*3+0]),
 					(float)(rgb[imageIndex[7]*3+0])};
 
-			ALIGNED float rAcc8[8] = {
+			 //-- Accumulated Color Values (gets computed)
+			 ALIGNED float rAcc8[8] = {
 					(float)(_color[idx+0].x),
 					(float)(_color[idx+1].x),
 					(float)(_color[idx+2].x),
@@ -1309,7 +1309,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+5].x),
 					(float)(_color[idx+6].x),
 					(float)(_color[idx+7].x)};
-			ALIGNED float gAcc8[8] = {
+			 ALIGNED float gAcc8[8] = {
 					(float)(_color[idx+0].y),
 					(float)(_color[idx+1].y),
 					(float)(_color[idx+2].y),
@@ -1318,7 +1318,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+5].y),
 					(float)(_color[idx+6].y),
 					(float)(_color[idx+7].y)};
-			ALIGNED float bAcc8[8] = {
+			 ALIGNED float bAcc8[8] = {
 					(float)(_color[idx+0].z),
 					(float)(_color[idx+1].z),
 					(float)(_color[idx+2].z),
@@ -1352,8 +1352,6 @@ void update8AddLoopAVXSingleInteger
 								_mm256_castsi256_ps(_mm256_and_si256(_mm256_cmpgt_epi32(_mm256_set1_epi32(imageWidth),imx),_mm256_cmpgt_epi32(imx,_mm256_set1_epi32(-1)))),
 								_mm256_cmp_ps(h8AVX,_mm256_set1_ps(maxcamdistance),_CMP_LT_OS))));
 
-
-
 			// (float)(dInc<DISTANCEWEIGHTEPSILON)
 			__m256 maskFront =
 					_mm256_and_ps(
@@ -1379,9 +1377,6 @@ void update8AddLoopAVXSingleInteger
 					_mm256_and_ps(
 							_mm256_add_ps(maskFront,_mm256_mul_ps(weightFall,maskBack)),
 							mask);
-
-
-//			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
 
 			// float factor = 1.0f/((float)(wPrev+wInc)+(float)(wPrev+wInc==0));
@@ -1403,8 +1398,6 @@ void update8AddLoopAVXSingleInteger
 														_mm256_min_ps(thresholdDistance,dInc)),
 												wInc))),
 							factor));
-
-			// _weights[idx] = wPrev+wInc;
 			_mm256_store_ps(_weights+idx,wNew);
 
 			//New: Thresholding to prevent Overexposure-Artefacts
@@ -1413,7 +1406,7 @@ void update8AddLoopAVXSingleInteger
 			_mm256_store_ps(gAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(gAcc,wAcc),_mm256_mul_ps(gInc,wInc)),factor),col_max));
 			_mm256_store_ps(bAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(bAcc,wAcc),_mm256_mul_ps(bInc,wInc)),factor),col_max));
 
-
+			//-- Extract Accumulated Color Values
 			_color[idx+0].x = rAcc8[0];
 			_color[idx+1].x = rAcc8[1];
 			_color[idx+2].x = rAcc8[2];
@@ -1440,7 +1433,6 @@ void update8AddLoopAVXSingleInteger
 			_color[idx+5].z = bAcc8[5];
 			_color[idx+6].z = bAcc8[6];
 			_color[idx+7].z = bAcc8[7];
-
 		}
 	}
 }
@@ -1463,25 +1455,19 @@ void update8AddLoopAVXSingleInteger
 		colortype3 *_color
 )
 {
-//-- Update Function which uses the available depth noise information for the SDF update.
-
+//-- Update Function which uses the available depth noise information for the SDF update. The weight increment
+//-- is scaled proportional to the inverse noise value given.
+	//-- Compute offset parameters
 	volumetype threadOffset = brickIdx*512;
 	float fleafScale = (float)(leafScale)*scale;
 	float ox = (m11*o.x+m12*o.y+m13*o.z)*scale + m14;
 	float oy = (m21*o.x+m22*o.y+m23*o.z)*scale + m24;
 	float oz = (m31*o.x+m32*o.y+m33*o.z)*scale + m34;
-//	float pxx, pxy, pxz, pyx, pyy, pyz, pzx, pzy, pzz;
 	float pyx, pyy, pyz, pzx, pzy, pzz;
 
 	float d11 = m11*fleafScale;
 	float d21 = m21*fleafScale;
 	float d31 = m31*fleafScale;
-	//-- 256 Bit vector initialization
-	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
-	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
-	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
-	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);				// Initializes 8 times with distanceThreshold*leafScale
-	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
 
 	float d12 = m12*fleafScale;
 	float d22 = m22*fleafScale;
@@ -1491,13 +1477,19 @@ void update8AddLoopAVXSingleInteger
 	float d23 = m23*fleafScale;
 	float d33 = m33*fleafScale;
 
+	//-- 256 Bit vector initialization
+	__m256 d11_AVX = _mm256_setr_ps(0.0f, d11, 2.0f*d11, 3.0f*d11, 4.0f*d11, 5.0f*d11, 6.0f*d11, 7.0f*d11);
+	__m256 d21_AVX = _mm256_setr_ps(0.0f, d21, 2.0f*d21, 3.0f*d21, 4.0f*d21, 5.0f*d21, 6.0f*d21, 7.0f*d21);
+	__m256 d31_AVX = _mm256_setr_ps(0.0f, d31, 2.0f*d31, 3.0f*d31, 4.0f*d31, 5.0f*d31, 6.0f*d31, 7.0f*d31);
+	__m256 thresholdDistance = _mm256_set1_ps(distanceThreshold*leafScale);				// Initializes 8 times with distanceThreshold*leafScale
+	__m256 thresholdWeight = _mm256_set1_ps(WEIGHT_FACTOR*distanceThreshold*leafScale);
+
 	//-- Serialized Update Algorithm (Algorithm 2 in Steinbrücker etal. icra2014)
 	pzx=ox;pzy=oy;pzz=oz;
 	for(int z=0;z<8;z++,pzx+=d13,pzy+=d23,pzz+=d33){
 		pyx=pzx;pyy=pzy;pyz=pzz;
 		for(int y=0;y<8;y++,pyx+=d12,pyy+=d22,pyz+=d32){
-
-
+			//-- Index and position of voxel
 			volumetype idx = threadOffset; threadOffset+=8;
 			__m256 pxx_AVX =  _mm256_add_ps(_mm256_set1_ps(pyx),d11_AVX);
 			__m256 pxy_AVX =  _mm256_add_ps(_mm256_set1_ps(pyy),d21_AVX);
@@ -1506,13 +1498,12 @@ void update8AddLoopAVXSingleInteger
 			// float length = sqrtf(pxx*pxx+pxy*pxy+pxz*pxz);
 			__m256 length = _mm256_sqrt_ps(_mm256_add_ps(_mm256_add_ps(
 					_mm256_mul_ps(pxx_AVX,pxx_AVX),_mm256_mul_ps(pxy_AVX,pxy_AVX)),_mm256_mul_ps(pxz_AVX,pxz_AVX)));
-
+			//-- Inverse depth
 			__m256 reciprocal = _mm256_rcp_ps(pxz_AVX);
 			// int imx = (int)floor(pxx/pxz*fx+cx);
 			__m256i imx = _mm256_cvtps_epi32(_mm256_add_ps(_mm256_set1_ps(cx),_mm256_mul_ps(_mm256_set1_ps(fx),_mm256_mul_ps(pxx_AVX,reciprocal))));
 			// int imy = (int)floor(pxy/pxz*fy+cy);
 			__m256i imy = _mm256_cvtps_epi32(_mm256_add_ps(_mm256_set1_ps(cy),_mm256_mul_ps(_mm256_set1_ps(fy),_mm256_mul_ps(pxy_AVX,reciprocal))));
-
 
 			// int imageIndex = imy*(imy>=0 && imy<imageHeight)*imageWidth + imx*(imx>=0 && imx<imageWidth);
 			ALIGNED int imageIndex[8];
@@ -1522,8 +1513,8 @@ void update8AddLoopAVXSingleInteger
 						 _mm256_set1_epi32(imageWidth),
 							 _mm256_max_epi32(_mm256_min_epi32(imy,_mm256_set1_epi32(imageHeight-1)),_mm256_setzero_si256())),
 								 _mm256_max_epi32(_mm256_min_epi32(imx,_mm256_set1_epi32(imageWidth-1)),_mm256_setzero_si256())));
-
-			ALIGNED float h8[8] = {
+			 //-- Depth Values
+			 ALIGNED float h8[8] = {
 					(float)(depth[imageIndex[0]]),
 					(float)(depth[imageIndex[1]]),
 					(float)(depth[imageIndex[2]]),
@@ -1532,8 +1523,8 @@ void update8AddLoopAVXSingleInteger
 					(float)(depth[imageIndex[5]]),
 					(float)(depth[imageIndex[6]]),
 					(float)(depth[imageIndex[7]])};
-
-			ALIGNED float noise8[8] = {
+			 //-- Noise Values
+			 ALIGNED float noise8[8] = {
 					(float)(depthNoise[imageIndex[0]]),
 					(float)(depthNoise[imageIndex[1]]),
 					(float)(depthNoise[imageIndex[2]]),
@@ -1542,8 +1533,8 @@ void update8AddLoopAVXSingleInteger
 					(float)(depthNoise[imageIndex[5]]),
 					(float)(depthNoise[imageIndex[6]]),
 					(float)(depthNoise[imageIndex[7]])};
-
-			ALIGNED float rInc8[8] = {
+			 //-- Incremental Color (from RGB frame)
+			 ALIGNED float rInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+2]),
 					(float)(rgb[imageIndex[1]*3+2]),
 					(float)(rgb[imageIndex[2]*3+2]),
@@ -1552,7 +1543,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[5]*3+2]),
 					(float)(rgb[imageIndex[6]*3+2]),
 					(float)(rgb[imageIndex[7]*3+2])};
-			ALIGNED float gInc8[8] = {
+			 ALIGNED float gInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+1]),
 					(float)(rgb[imageIndex[1]*3+1]),
 					(float)(rgb[imageIndex[2]*3+1]),
@@ -1561,7 +1552,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[5]*3+1]),
 					(float)(rgb[imageIndex[6]*3+1]),
 					(float)(rgb[imageIndex[7]*3+1])};
-			ALIGNED float bInc8[8] = {
+			 ALIGNED float bInc8[8] = {
 					(float)(rgb[imageIndex[0]*3+0]),
 					(float)(rgb[imageIndex[1]*3+0]),
 					(float)(rgb[imageIndex[2]*3+0]),
@@ -1570,8 +1561,8 @@ void update8AddLoopAVXSingleInteger
 					(float)(rgb[imageIndex[5]*3+0]),
 					(float)(rgb[imageIndex[6]*3+0]),
 					(float)(rgb[imageIndex[7]*3+0])};
-
-			ALIGNED float rAcc8[8] = {
+			 //-- Accumulated Color (gets computed)
+			 ALIGNED float rAcc8[8] = {
 					(float)(_color[idx+0].x),
 					(float)(_color[idx+1].x),
 					(float)(_color[idx+2].x),
@@ -1580,7 +1571,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+5].x),
 					(float)(_color[idx+6].x),
 					(float)(_color[idx+7].x)};
-			ALIGNED float gAcc8[8] = {
+			 ALIGNED float gAcc8[8] = {
 					(float)(_color[idx+0].y),
 					(float)(_color[idx+1].y),
 					(float)(_color[idx+2].y),
@@ -1589,7 +1580,7 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+5].y),
 					(float)(_color[idx+6].y),
 					(float)(_color[idx+7].y)};
-			ALIGNED float bAcc8[8] = {
+			 ALIGNED float bAcc8[8] = {
 					(float)(_color[idx+0].z),
 					(float)(_color[idx+1].z),
 					(float)(_color[idx+2].z),
@@ -1598,7 +1589,6 @@ void update8AddLoopAVXSingleInteger
 					(float)(_color[idx+5].z),
 					(float)(_color[idx+6].z),
 					(float)(_color[idx+7].z)};
-
 
 			// float dInc = length - length/pxz*h;
 			__m256 h8AVX = _mm256_mul_ps(_mm256_set1_ps(scaling),_mm256_load_ps(h8));
@@ -1669,19 +1659,15 @@ void update8AddLoopAVXSingleInteger
 							_mm256_rcp_ps(
 									_mm256_sub_ps(thresholdWeight,_mm256_set1_ps(DISTANCEWEIGHTEPSILON))));
 
-
-			//-- Insert Addaptive Weighting here
+			//-- Noise adaptive weighting (multiplicative)
 			__m256 wInc1 =
 					_mm256_and_ps(
 							_mm256_add_ps(maskFront,_mm256_mul_ps(weightFall,maskBack)),
 							mask);
-
 			__m256 wInc =
 					_mm256_mul_ps(
 							_mm256_mul_ps(
 									wInc1, _mm256_rcp_ps(noise8bounded)), _mm256_set1_ps(MIN_NOISE_LEVEL));
-
-//			__m128 wNew = _mm_add_ps(wAcc,wInc);
 			__m256 wNew = _mm256_add_ps(wAcc,wInc);
 
 			// float factor = 1.0f/((float)(wPrev+wInc)+(float)(wPrev+wInc==0));
@@ -1701,8 +1687,8 @@ void update8AddLoopAVXSingleInteger
 												_mm256_max_ps(
 														_mm256_mul_ps(_mm256_set1_ps(-1.0f),thresholdDistance),
 														_mm256_min_ps(thresholdDistance,dInc)),
-												wInc))),
-							factor));
+														wInc))),
+														factor));
 
 			// _weights[idx] = wPrev+wInc;
 			_mm256_store_ps(_weights+idx,wNew);
@@ -1713,7 +1699,7 @@ void update8AddLoopAVXSingleInteger
 			_mm256_store_ps(gAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(gAcc,wAcc),_mm256_mul_ps(gInc,wInc)),factor),col_max));
 			_mm256_store_ps(bAcc8,_mm256_min_ps(_mm256_mul_ps(_mm256_add_ps(_mm256_mul_ps(bAcc,wAcc),_mm256_mul_ps(bInc,wInc)),factor),col_max));
 
-
+			//-- Extract Accumulated Color Values
 			_color[idx+0].x = rAcc8[0];
 			_color[idx+1].x = rAcc8[1];
 			_color[idx+2].x = rAcc8[2];
@@ -1740,27 +1726,31 @@ void update8AddLoopAVXSingleInteger
 			_color[idx+5].z = bAcc8[5];
 			_color[idx+6].z = bAcc8[6];
 			_color[idx+7].z = bAcc8[7];
-
 		}
 	}
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 8.02.2016
+void update8zeroWeight(volumetype &brickIdx, weighttype *_weights) {
+//-- Set the weights to zero (outdated Brick)
+	volumetype threadOffset = brickIdx*512;
+	for(int z = 0; z < 8; z++){
+		for(int y = 0; y < 8; y++){
+			volumetype idx = threadOffset; threadOffset+=8;
+			__m256 wAcc = _mm256_load_ps(_weights+idx);
+			wAcc = _mm256_setzero_ps();
+			_mm256_store_ps(_weights+idx,wAcc);
+		}
+	}
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 typedef struct SDFUpdateParameterFloat_ {
@@ -1804,8 +1794,12 @@ typedef struct SDFUpdateParameterFloat_ {
 			{}
 } SDFUpdateParameterFloat;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// edited: karrerm
 typedef struct SDFUpdateParameterInteger_ {
-	const ushort *depth; const float *depthNoise;float scaling; float maxcamdistance;
+	const ushort *depth;
+	const float *depthNoise; 		// Noise image (if not available --> set to NULL)
+	float scaling; float maxcamdistance;
 	const uchar *rgb;
 	int imageWidth; int imageHeight;
 	float m11; float m12; float m13; float m14;
@@ -1816,6 +1810,7 @@ typedef struct SDFUpdateParameterInteger_ {
 	volumetype *_leafNumber; sidetype3 *_leafPos; sidetype *_leafScale;
 	float *_distance; weighttype *_weights; colortype3 *_color;
 	sidetype brickLength;
+	double time; double decayTime;	// Parameters to track update time
 	SDFUpdateParameterInteger_(
 			const ushort *depth, const float *depthNoise, float scaling, float maxcamdistance,
 			const uchar *rgb,
@@ -1827,7 +1822,7 @@ typedef struct SDFUpdateParameterInteger_ {
 			float scale, float distanceThreshold,
 			volumetype *_leafNumber, sidetype3 *_leafPos, sidetype *_leafScale,
 			float *_distance, weighttype *_weights, colortype3 *_color,
-			sidetype brickLength):
+			sidetype brickLength, double time, double decayTime):
 			depth(depth), depthNoise(depthNoise),scaling(scaling), maxcamdistance(maxcamdistance), rgb(rgb),
 			imageWidth(imageWidth), imageHeight(imageHeight),
 			m11(m11), m12(m12), m13(m13), m14(m14),
@@ -1837,10 +1832,10 @@ typedef struct SDFUpdateParameterInteger_ {
 			scale(scale), distanceThreshold(distanceThreshold),
 			_leafNumber(_leafNumber), _leafPos(_leafPos), _leafScale(_leafScale),
 			_distance(_distance), _weights(_weights), _color(_color),
-			brickLength(brickLength)
+			brickLength(brickLength), time(time), decayTime(decayTime)
 			{}
 } SDFUpdateParameterInteger;
-
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -1932,15 +1927,25 @@ void updateWrapperFloat
   if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
 }
 
-
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// edited: karrerm
 void updateWrapperInteger
 (
 		SDFUpdateParameterInteger param,
 		volatile volumetype * _nLeavesQueued,
 		volatile bool *_threadValid,
-		volumetype startLeaf
+		volumetype startLeaf,
+		std::vector<volumetype> * meshCellsUsed,
+		std::vector<double> * latestUpdateTime,
+		std::vector<volumetype> *outdatedMeshCells,
+		bool * leafNumberIsOutdated
 )
 {
+//-- Wrapper Function to execute Update of the SDF values in the tree. The Depth data is given as Integer Values which are
+//-- scaled by the parameter param.scale. If noise data is available, the update is performed by using noise dependent weights.
+//-- If the Parameter param.decayTime is larger than zero, a time window based reconstruction is performed, i.e. bricks that are
+//-- not updated within the time horizon param.decayTime will be set to be removed.
+	//-- Extract the values of the SDFUpdateParameterInterger struct
 	const ushort *depth = param.depth;
 	const float *depthNoise = param.depthNoise;
 	float scaling = param.scaling;
@@ -1972,86 +1977,110 @@ void updateWrapperInteger
 	float *_distance = param._distance;
 	weighttype *_weights = param._weights;
 	colortype3 *_color = param._color;
-//	sidetype _brickLength = param.brickLength;
+	const double time = param.time;
+	const double decayTime = param.decayTime;
 
-//	volumetype brickSize = _brickLength*_brickLength*_brickLength;
-
+	//-- Loop over all queued bricks
 	volumetype l1 = startLeaf;
-
-
-  unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
-  if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
-
+	int sumNewCells = 0;
+	int sumOutdatedCells = 0;
+	unsigned int rnd_mode = _MM_GET_ROUNDING_MODE();
+	if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(_MM_ROUND_TOWARD_ZERO);
 	while(*_threadValid || l1 < *_nLeavesQueued){
 		volumetype nLeavesQueued = *_nLeavesQueued;
 		for(volumetype l=l1;l<nLeavesQueued;l++){
 			volumetype brickIdx = _leafNumber[l];
+			if (decayTime >0.0){
+				if (!leafNumberIsOutdated[l]) {
+					bool alreadySeen = false;
+					//-- Loop to check for outdated bricks
+					for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
+						if ((*meshCellsUsed)[i] == brickIdx) {
+							//-- MeshCell was allready seen --> update latest time
+							alreadySeen = true;
+							(*latestUpdateTime)[i] = time;
+						}
+						if ((time - (*latestUpdateTime)[i]) > decayTime) {
+							//-- The Mesh Cell is outdated --> add it to be removed
+							sumOutdatedCells++;
+							outdatedMeshCells->push_back((*meshCellsUsed)[i]);
+							meshCellsUsed->erase(meshCellsUsed->begin() + i);
+							latestUpdateTime->erase(latestUpdateTime->begin() + i);
+							i--;
+						}
+					}
+					if (alreadySeen == false) {
+						//-- First obervation of this brick --> add it to be tracked
+						sumNewCells++;
+						meshCellsUsed->push_back(brickIdx);
+						latestUpdateTime->push_back(time);
+					}
+				}
+			}
 			sidetype3 o = _leafPos[brickIdx];
 			sidetype leafScale = _leafScale[brickIdx];
 
-//			update8NaiveInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopLoopSingleInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopLoopSingle_noJumpsInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
-			//TODO: Noch nicht implementiert
-//			update8AddLoopSIMDSingleInteger(depth,red,green,blue,imageWidth,imageHeight,
-//					m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-//					scale,distanceThreshold,brickIdx,o,leafScale,
-//					_distance,_weights,_color);
-
 #ifdef OWNAVX
 #pragma message "Compiling with AVX2 support"
-		    if (depthNoise) {
-		    	//-- Depth Noise Data is available, use routine with adaptive weighting
-		    	update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-						scale,distanceThreshold,brickIdx,o,leafScale,
-						_distance,_weights,_color);
-		    } else {
-		    	//-- No Depth Noise Data is available, use standard update routine
-		    	update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
-						scale,distanceThreshold,brickIdx,o,leafScale,
-						_distance,_weights,_color);
-		    }
+			if (decayTime > 0.0) {
+				//-- Time decay of the surface --> delete data on regions which haven't been seen in a certain time range
+				if (!leafNumberIsOutdated[l]){
+					if (depthNoise) {
+						//-- Depth Noise Data is available, use routine with adaptive weighting
+						update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+								m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+								scale,distanceThreshold,brickIdx,o,leafScale,
+								_distance,_weights,_color);
+					} else {
+						//-- No Depth Noise Data is available, use standard update routine
+						update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+								m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+								scale,distanceThreshold,brickIdx,o,leafScale,
+								_distance,_weights,_color);
+					}
+				} else {
+					//-- Delete Mesh element (by setting its weight to zero)
+					update8zeroWeight(brickIdx,_weights);
+					leafNumberIsOutdated[l] = false;
+				}
+			} else {
+				//-- No Time decay of the reconstruction --> keep all data
+				if (depthNoise) {
+					//-- Depth Noise Data is available, use routine with adaptive weighting
+					update8AddLoopAVXSingleInteger(depth, depthNoise,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+							m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+							scale,distanceThreshold,brickIdx,o,leafScale,
+							_distance,_weights,_color);
+				} else {
+					//-- No Depth Noise Data is available, use standard update routine
+					update8AddLoopAVXSingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+							m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+							scale,distanceThreshold,brickIdx,o,leafScale,
+							_distance,_weights,_color);
+				}
+			}
 #else
 #pragma message "Compiling without AVX2 support"
-		    if (depthNoise) {
-		    	//-- Depth Noise Data is available, use routine with adaptive weighting
-		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+			if (depthNoise) {
+				//-- Depth Noise Data is available, use routine with adaptive weighting
+				update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+						m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 						scale,distanceThreshold,brickIdx,o,leafScale,
 						_distance,_weights,_color);
-		    } else {
-		    	//-- No Depth Noise Data is available, use standard update routine
-		    	update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
-		    			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
+			} else {
+				//-- No Depth Noise Data is available, use standard update routine
+				update8AddLoopSSESingleInteger(depth,scaling,maxcamdistance,rgb,imageWidth,imageHeight,
+						m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,fx,fy,cx,cy,
 						scale,distanceThreshold,brickIdx,o,leafScale,
 						_distance,_weights,_color);
-		    }
+			}
 #endif
-
-
 		}
 		l1 = nLeavesQueued;
 	}
-
-  if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
+	if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
 }
 
-
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
