@@ -2,11 +2,11 @@
 <launch>
 
 <!-- Use the algorithm together with a Bagfile, compute poses using OKVIS -->
-	<arg name="camera_name" value="/picoflexx/cam0"/>
+	<arg name="camera_name" value="/camera"/>
 	
 	<!-- Run Bagfile -->
      <node pkg="rosbag" type="play" name="player" output="screen"   
-      args="-r 1.0 /home/karrer/FinalDataSet/2016_Feb_12/Picoflexx/Desk/Mode1/desk_mode1_3.bag --clock"/> 
+      args="-r 1.0 /home/karrer/FinalDataSet/2016_Feb_12/Realsense/Desk/desk_3.bag --clock"/> 
       <!--/home/karrer/FinalDataSet/2016_Feb_11/Picoflexx/Boiler/boiler_mode1_oneside2.bag" -->
       
 	<!-- Run Okvis (Monocular) -->
@@ -25,7 +25,7 @@
 
 		<!-- Load parameters -->
  		<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
- 		<rosparam file="/home/karrer/FinalDataSet/2016_Feb_12/Picoflexx/Rig_Calibration/run2/calibration_params.yaml"/>
+ 		<rosparam file="/home/karrer/FinalDataSet/2016_Feb_11/Realsense/Rig_Calibration/run1/calibration_params.yaml"/>
 	</node>
 	
 </launch>
