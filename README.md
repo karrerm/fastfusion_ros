@@ -8,6 +8,8 @@ If some (pixelwise) uncertainty is available (for example when using a ToF camer
 ---
 Required Packages:
 * catkin_simple  : ```git clone https://github.com/ethz-asl/catkin_simple.git```
+When using okvis for the pose estimation (requires VI-Sensor)
+* okvis_ros      : ```git clone https://github.com/ethz-asl/okvis_ros```
 
 Installation of fastfusion_ros:
 
@@ -16,7 +18,7 @@ git clone https://github.com/karrerm/fastfusion_ros
 cd ..
 catkin_make -DCMAKE_BUILD_TYPE=RELEASE
 ```
-**Usage**
+**Usage:**
 ---
 ###**Parameters**
 ```
@@ -49,5 +51,23 @@ catkin_make -DCMAKE_BUILD_TYPE=RELEASE
   --use_pcl_visualizer
     show the current reconstruction using a pcl-visualizer
 ```
+###**Run the system (fastfusion_node_dataset.launch)**
+Intended for the use with a dataset including pose data for the sensor pose (e.g. Vicon poses).
+In the launch file set the camera_name matching your sensor naming and adapt the renaming. Note that the images are only considered for the case when using a ToF camera, otherwise only the registered point-cloud topic is used. Set the correct path to the parameterfile as well as the calibration file and the bag-file containing your data. Then run the system using
+```
+roslaunch fastfusion_ros fastfusion_node_dataset.launch
+```
 
+###**Run the system with OKVIS (fastfusion_node_slam.launch)**
+Intended for the use of a multisensor setup with a depth sensor mounted on a VI-sensor. In the launch file set the camera_name matching your sensor naming and adapt the renaming. Note that the images are only considered for the case when using a ToF camera, otherwise only the registered point-cloud topic is used. Set the correct path to the parameterfile as well as the calibration file and the bag-file containing your data. Setup the correct calibration for Okvis. Then run the system using
+```
+roslaunch fastfusion_ros fastfusion_node_slam.launch
+```
 
+**Remarks**
+---
+* When using the system performing the full data fusion (decay_time <=0.0), make sure you have either ground truth poses (Vicon) or SLAM poses with little drift. Otherwise the reconstruction will be bad (e.g. multiple reconstructions).
+* Setting the decay_time to large values (> 4 sec) and fast motions will result in increase the computation time.
+* If you use an RGB-D camera, make sure that the data is available as a colored point cloud, which is the expected input.
+* Setting the voxel-resolution (scale) to small values (especially less than 0.005) will increase the computation time as well as the memory requirement.
+* For the case with time-window based reconstruction, the current model (vertices) are available as a rostopic (fastfusion/pointCloud).
