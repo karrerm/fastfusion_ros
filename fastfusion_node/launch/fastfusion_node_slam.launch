@@ -25,7 +25,7 @@
 
 		<!-- Load parameters -->
  		<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
- 		<rosparam file="/home/karrer/FinalDataSet/2016_Feb_11/Realsense/Rig_Calibration/run1/calibration_params.yaml"/>
+ 		<rosparam file="$(find fastfusion_node)/cfg/camchain_realsense.yaml"/>
 	</node>
 	
 </launch>

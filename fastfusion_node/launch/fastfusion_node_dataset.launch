@@ -6,7 +6,7 @@
 	
 	<!-- Run Bagfile -->
      <node pkg="rosbag" type="play" name="player" output="screen"   
-      args="-r 2.0 /home/karrer/Desktop/Dataset3/2016_Jan_09/Picoflexx/Desk/Mode1/desk_mode1_run4.bag" />
+      args="-r 1.0 /home/karrer/FinalDataSet/2016_Feb_12/Realsense/Desk/desk_3.bag" />
 
 	<!-- Run fastfusion_node-->
 	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
@@ -17,7 +17,7 @@
 		
 		<!-- Load parameters -->
  		<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
-		<rosparam file="$(find fastfusion_node)/cfg/camchain_pico.yaml"/>
+		<rosparam file="$(find fastfusion_node)/cfg/camchain_realsense.yaml"/>
 	</node>
 	
 </launch>
