@@ -36,6 +36,8 @@ catkin_make -DCMAKE_BUILD_TYPE=RELEASE
     whether the mesh should be saved when exiting the node
   --fileLocation
     if saveMesh=true, where to save the mesh
+  --use_vicon_pose
+    use vicon measurements for the pose input (uses different extrinsic transformation)
   --world_id
     name of the world frame
   --tracker_id
@@ -51,6 +53,19 @@ catkin_make -DCMAKE_BUILD_TYPE=RELEASE
   --use_pcl_visualizer
     show the current reconstruction using a pcl-visualizer
 ```
+There are more paramaters which can be adapted, however, these are hardcoded in the file fusion/include/fusion/definitions.h. The most used are
+```
+  --MAXCAMDISTANCE
+    Defines the maximal range up to which measurements are considered in the reconstruction
+  --MIN_WEIGHT_FOR_SURFACE
+    Minimal weight of a voxel in order to be triangulated. Higher weights make it more robust to outliers, but delay the reconstruction.
+  --REFERENCE_NOISE
+    Defines the scaling of the noise-adaptive weighting (only for ToF)
+  --MIN_NOISE_LEVEL
+    Minimal uncertainty. Measurements with less noise are considered with MIN_NOISE_LEVEL noise.
+```
+Note that changing these parameters requires re-compiling the code in order to be applied.
+
 ###**Run the system (fastfusion_node_dataset.launch)**
 Intended for the use with a dataset including pose data for the sensor pose (e.g. Vicon poses).
 In the launch file set the camera_name matching your sensor naming and adapt the renaming. Note that the images are only considered for the case when using a ToF camera, otherwise only the registered point-cloud topic is used. Set the correct path to the parameterfile as well as the calibration file and the bag-file containing your data. Then run the system using
