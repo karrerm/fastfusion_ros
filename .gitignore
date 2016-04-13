@@ -1,8 +1,4 @@
-/fastfusion_node/cfg/camchain_pico.yaml~
-/fastfusion_node/cfg/params.yaml~
-/fastfusion_node/launch/fastfusion_node_dataset.launch~
-/fastfusion_node/launch/fastfusion_node_slam.launch~
-/fusion/include/fusion/definitions.h~
+*~
 .cproject
 .project
 .settings

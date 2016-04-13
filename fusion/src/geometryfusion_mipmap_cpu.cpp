@@ -5,7 +5,9 @@
  *      Author: steinbrf
  *      Edited: karrerm
  */
+#ifdef __LINUX__
 #include <omp.h>
+#endif
 #include <auxiliary/debug.hpp>
 #include <auxiliary/memory.hpp>
 #include "fusion/treeandbrick.hpp"
@@ -1312,7 +1314,7 @@ int FusionMipMapCPU::addMap(cv::Mat &depth, CameraInfo caminfo,
 	cv::Mat rot = caminfo.getRotation();
 	cv::Mat trans = caminfo.getTranslation();
 	cv::Mat intr = caminfo.getIntrinsic();
-	
+
 	_nLeavesBeforeLastFrame = _nLeavesUsed;
 	volumetype branchesBeforeLastFrame = _nBranchesUsed;
 	size_t meshCellsBeforeLastFrame = _meshCells.size();
@@ -4516,8 +4518,8 @@ void FusionMipMapCPU::saveZimages()
 						fprintf(stderr,"\n%li Leaves for Z == %i",leaves.size(),z);
 						for(sidetype z1=0;z1<_brickLength;z1++){
 							fprintf(stderr,"\nIn-Brick-Z: %i: ",z1);
-							cv::Mat slice[scale];
-							cv::Mat colorslice[scale];
+							std::vector<cv::Mat> slice(scale);
+							std::vector<cv::Mat> colorslice(scale);
 
 							for(sidetype largMemOff=0;largMemOff<scale;largMemOff+=imagesInMemory){
 //								for(sidetype z2=0;z2<scale;z2++){
@@ -4880,11 +4882,3 @@ void FusionMipMapCPU::saveZimagesFull()
 	}
 
 }
-
-
-
-
-
-
-
-
