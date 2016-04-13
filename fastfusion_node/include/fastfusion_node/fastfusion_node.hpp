@@ -107,6 +107,7 @@ protected:
 	int frameCounter_;
 	bool use_pmd_, depth_noise_;
 	bool testing_point_cloud_;
+	bool use_vicon_pose_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrame_;
 	pcl::PointCloud<pcl::PointXYZRGB> pointCloudFrameTrans_;
 	bool use_pcl_visualizer_;
