@@ -248,7 +248,6 @@ void OnlineFusionROS::fusionWrapperROS(void) {
 				_newMesh = _fusion->updateMeshes();
 			} else {
 				//-- No Depth Noise Data is available
-				std::cout << "FrameQueue has: " << queueRGB.size() << " Elements " << std::endl;
 				currImgRGB = queueRGB.front();
 				queueRGB.pop();
 				currImgDepth = queueDepth.front();
@@ -358,7 +357,6 @@ void OnlineFusionROS::visualize() {
     		//-- Update Viewer
     		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
     		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
-    		std::cout << "There are: " << points_ptr->size() << " Points in the model" << std::endl;
     		if (points_ptr->points.size() > 0) {
 				//-- KdTree for NN-search
 				/*

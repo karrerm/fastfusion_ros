@@ -37,6 +37,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	loadSuccess &= nodeLocal_.getParam("use_pmd",use_pmd_);						// Use ToF of RGBD
 	loadSuccess &= nodeLocal_.getParam("depth_noise",depth_noise_);				// Depth noise data is available
 	loadSuccess &= nodeLocal_.getParam("use_pcl_visualizer", use_pcl_visualizer_);// Use the pcl visualizer to show point cloud
+	loadSuccess &= nodeLocal_.getParam("use_vicon_pose", use_vicon_pose_);		// Use ground truth poses from vicon
 
 	//-- Read Camera to IMU transformation
 	XmlRpc::XmlRpcValue T_cam0_imu;
@@ -594,10 +595,18 @@ void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 //-- Function used to broadcast the necessary tf-transformations to complete the chain between origin
 //-- and the corresponding pose of the depth sensor.
 	if (use_pmd_) {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		if (use_vicon_pose_) {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		} else {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, tracker_id_, "cam0"));
+		}
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
 	} else {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		if (use_vicon_pose_) {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
+		} else {
+			tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, tracker_id_, "cam0"));
+		}
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
 	}
 }

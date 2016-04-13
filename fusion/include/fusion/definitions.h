@@ -200,7 +200,7 @@ typedef struct int3_ { int x; int y; int z;} int3;
 #endif
 
 #define MAXCAMDISTANCE 3.0				// Maximal distances to take into account
-#define MIN_WEIGHT_FOR_SURFACE 1.0 		// Minimal accumulated weight in order to perform meshing
+#define MIN_WEIGHT_FOR_SURFACE 8.0 		// Minimal accumulated weight in order to perform meshing
 #define ADD_WEIGHTS_TRANSITION_140424
 #define FRUSTUM_FAR 1.0
 
