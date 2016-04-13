@@ -19,14 +19,15 @@ saveMesh : false
 fileLocation : /home/karrer/forPaper
 
 # TF Id's
-world_id : /world
-tracker_id : /body
+use_vicon_pose : true
+world_id : /vicon
+tracker_id : /camera_imu
 cam_id : /realsense_frame
 
 # Use time-window based reconstruction
 # Set decay_time to value <= 0.0 to achieve full reconstruction,
 # otherwise the defined time window (decay_time) is used
-decay_time : 3.0
+decay_time : 0.0
 
 # Define if using Time of flight sensor or not
 use_pmd : false
