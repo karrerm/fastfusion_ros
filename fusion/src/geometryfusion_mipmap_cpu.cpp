@@ -604,6 +604,7 @@ _threadMeshing(false)
 
 _avgBricksUpdated = 0;
 _avgBricksTracked = 0;
+_avgOverheadTimeWindow = 0.0;
 //	fprintf(stderr,"\nPress Enter to resize the vectors");
 //	fprintf(stderr,"%s",fgets(input,256,stdin));
 //	//  MeshCell testCell(7,0,0,0,1,BRANCHINIT);
@@ -990,7 +991,8 @@ FusionMipMapCPU::~FusionMipMapCPU()
 	if(_verbose) fprintf(stderr,"\nAverage Time for Summing Up the Mesh Cells: %f",
 			_avgTimeSumMesh/(cv::getTickFrequency()*_framesAdded));
 	if(_verbose) fprintf(stderr,"\nAverage Number of Leaves: %i",_averageLeaves/_framesAdded);
-	if(_verbose) fprintf(stderr,"\nAverage Number of trackes Bricks: %d", ((double)_avgBricksTracked) / ((double) _framesAdded));
+	if(_verbose) fprintf(stderr,"\nAverage Number of trackes Bricks: %f", ((double)_avgBricksTracked) / ((double) _framesAdded));
+	if(_verbose) fprintf(stderr,"\nAverage Number overhead for time window: %f ms", 1000.0*(_avgOverheadTimeWindow) / ((double) _framesAdded));
 	fprintf(stderr,"\nFusionOctreeGPU deleted");
 
 
@@ -1721,13 +1723,15 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	//-- If fusion is threaded --> add thread (not used)
 	std::thread *distanceUpdateThread = NULL;
 	if(_threaded){
+	double timeOverhead = 0.0;
 	distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
 			(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength,time, decayTime),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells, &_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
+			_distance,_weights,_color,_brickLength,time, decayTime),&_nLeavesQueuedSurface,&_threadValid,0, &_outdatedMeshCells,_leafNumberIsOutdated,&_usedCellsWithTime, &timeOverhead);
+	_avgOverheadTimeWindow += timeOverhead;
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -1809,13 +1813,15 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	else{
 		//-- Update the SDF values where observed
 		_avgBricksUpdated += _nLeavesQueuedSurface;
+		double timeOverhead = 0.0;
 		updateWrapperInteger(SDFUpdateParameterInteger(
 				(const ushort*)depthData,(const float*)noiseData, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength,time, decayTime),&_nLeavesQueuedSurface,&_threadValid,0, &_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
+				_distance,_weights,_color,_brickLength,time, decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_outdatedMeshCells,_leafNumberIsOutdated,&_usedCellsWithTime, &timeOverhead);
+		_avgOverheadTimeWindow += timeOverhead;
 		time4 = (double)cv::getTickCount();
 	}
 	double time5 = (double)cv::getTickCount();
@@ -1871,7 +1877,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 		_frameStatistics.back().timeTraversal = time2-time1;
 	}
 	_averageLeaves += _nLeavesQueuedSurface;
-	_avgBricksTracked += _usedMeshCells.size();
+	_avgBricksTracked += _usedCellsWithTime.size();
 	if((_framesAdded-1)%25==0){
 		size_t meshIndicesBranchSize = 0;
 		size_t meshIndicesBranchEmptySize = 0;
@@ -2026,13 +2032,15 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	_avgBricksUpdated += _nLeavesQueuedSurface;
 	if(_threaded){
 		//-- Add Null pointer in SDFUpdateParameterInteger to where the depth noise data would be
+	  double timeOverhead = 0.0;
 		distanceUpdateThread = new std::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
 			(const ushort*)depthdata, NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 			_imageWidth,_imageHeight,
 			m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 			pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 			_leafNumberSurface,_leafPos,_leafScale,
-			_distance,_weights,_color,_brickLength,time,decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells,_leafNumberIsOutdated);
+			_distance,_weights,_color,_brickLength,time,decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_outdatedMeshCells,_leafNumberIsOutdated, &_usedCellsWithTime, &timeOverhead);
+		_avgOverheadTimeWindow += timeOverhead;
 	}
 
 	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
@@ -2112,13 +2120,15 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 	else{
 		//-- Update the SDF values of the queued Bricks
 		_avgBricksUpdated += _nLeavesQueuedSurface;
+		double timeOverhead = 0.0;
 		updateWrapperInteger(SDFUpdateParameterInteger(
 				(const ushort*)depthdata,  NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
 				_imageWidth,_imageHeight,
 				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
 				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
 				_leafNumberSurface,_leafPos,_leafScale,
-				_distance,_weights,_color,_brickLength,time,decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_usedMeshCells,&_latestUpdateTime, &_outdatedMeshCells, _leafNumberIsOutdated);
+				_distance,_weights,_color,_brickLength,time,decayTime),&_nLeavesQueuedSurface,&_threadValid,0,&_outdatedMeshCells, _leafNumberIsOutdated,&_usedCellsWithTime, &timeOverhead);
+		_avgOverheadTimeWindow += timeOverhead;
 		time4 = (double)cv::getTickCount();
 	}
 	double time5 = (double)cv::getTickCount();
@@ -2175,7 +2185,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::
 		_frameStatistics.back().timeTraversal = time2-time1;
 	}
 	_averageLeaves += _nLeavesQueuedSurface;
-	_avgBricksTracked += _usedMeshCells.size();
+	_avgBricksTracked += _usedCellsWithTime.size();
 	if((_framesAdded-1)%25==0){
 		size_t meshIndicesBranchSize = 0;
 		size_t meshIndicesBranchEmptySize = 0;

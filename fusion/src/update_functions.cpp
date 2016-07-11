@@ -6,7 +6,7 @@
  *      Edited: karrerm
  */
 
-
+#include <algorithm>    // std::find_if
 
 void updateVarMulLoopSimSingle
 (
@@ -1935,10 +1935,10 @@ void updateWrapperInteger
 		volatile volumetype * _nLeavesQueued,
 		volatile bool *_threadValid,
 		volumetype startLeaf,
-		std::vector<volumetype> * meshCellsUsed,
-		std::vector<double> * latestUpdateTime,
 		std::vector<volumetype> *outdatedMeshCells,
-		bool * leafNumberIsOutdated
+		bool * leafNumberIsOutdated,
+		std::map<volumetype, double> *usedCellsWithTime,
+		double *timeOverhead
 )
 {
 //-- Wrapper Function to execute Update of the SDF values in the tree. The Depth data is given as Integer Values which are
@@ -1980,7 +1980,11 @@ void updateWrapperInteger
 	const double time = param.time;
 	const double decayTime = param.decayTime;
 
+	std::vector<volumetype> tmpOutdated;
+
 	//-- Loop over all queued bricks
+	*timeOverhead = 0.0;
+	double timeInc = 0.0;
 	volumetype l1 = startLeaf;
 	int sumNewCells = 0;
 	int sumOutdatedCells = 0;
@@ -1992,29 +1996,19 @@ void updateWrapperInteger
 			volumetype brickIdx = _leafNumber[l];
 			if (decayTime >0.0){
 				if (!leafNumberIsOutdated[l]) {
-					bool alreadySeen = false;
-					//-- Loop to check for outdated bricks
-					for (unsigned int i = 0; i < meshCellsUsed->size(); i++) {
-						if ((*meshCellsUsed)[i] == brickIdx) {
-							//-- MeshCell was allready seen --> update latest time
-							alreadySeen = true;
-							(*latestUpdateTime)[i] = time;
-						}
-						if ((time - (*latestUpdateTime)[i]) > decayTime) {
-							//-- The Mesh Cell is outdated --> add it to be removed
-							sumOutdatedCells++;
-							outdatedMeshCells->push_back((*meshCellsUsed)[i]);
-							meshCellsUsed->erase(meshCellsUsed->begin() + i);
-							latestUpdateTime->erase(latestUpdateTime->begin() + i);
-							i--;
-						}
-					}
-					if (alreadySeen == false) {
-						//-- First obervation of this brick --> add it to be tracked
-						sumNewCells++;
-						meshCellsUsed->push_back(brickIdx);
-						latestUpdateTime->push_back(time);
-					}
+				  timeInc = (double)cv::getTickCount();
+				  auto it = usedCellsWithTime->find(brickIdx);
+				  // Check if brick was already observed
+				  if (it == usedCellsWithTime->end()) {
+				    // This is a new brick
+				    usedCellsWithTime->insert(std::pair<volumetype,double>(brickIdx,time));
+				    sumNewCells++;
+				  } else {
+				    // This brick was already observed --> update time
+				    usedCellsWithTime->at(brickIdx) = time;
+				  }
+				  timeInc = ((double)cv::getTickCount() - timeInc)/cv::getTickFrequency();
+				  *timeOverhead += timeInc;
 				}
 			}
 			sidetype3 o = _leafPos[brickIdx];
@@ -2079,6 +2073,19 @@ void updateWrapperInteger
 		l1 = nLeavesQueued;
 	}
 	if(rnd_mode != _MM_ROUND_TOWARD_ZERO) _MM_SET_ROUNDING_MODE(rnd_mode);
+	if (decayTime > 0.0) {
+	  timeInc = (double)cv::getTickCount();
+	  for (auto itr = usedCellsWithTime->begin(); itr != usedCellsWithTime->end(); itr++) {
+	    if ((time - itr->second) > decayTime ) {
+	      outdatedMeshCells->push_back(itr->first);
+	      usedCellsWithTime->erase(itr);
+	    }
+	  }
+	timeInc = ((double)cv::getTickCount() - timeInc)/cv::getTickFrequency();
+	*timeOverhead += timeInc;
+	} else {
+	  *timeOverhead = 0.0;
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
