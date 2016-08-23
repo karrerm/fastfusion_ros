@@ -219,7 +219,6 @@ void FastFusionWrapper::run() {
 		subscriberPointCloud_->subscribe(node_, node_.resolveName("point_cloud"),15);
 		subscriberPointCloud_->registerCallback(&FastFusionWrapper::registerPointCloudCallback,this);
 	}
-
 	//-- Point Cloud publisher (only used for time window based reconstruction
 	ros::Publisher output_pub_ = node_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > ("fastfusion/pointCloud", 100);
 	frameCounter_ = 0;
@@ -245,7 +244,7 @@ void FastFusionWrapper::run() {
 		//-- Publish the current point cloud
 		if ((frameCounter_ > 8) && (runMapping_) && decayTime_ >0.0 ){
 			pcl::PointCloud<pcl::PointXYZRGB> cloud = onlinefusion_.getCurrentPointCloud();
-			cloud.header.frame_id = "/world";
+			cloud.header.frame_id = world_id_;
 			ros::Time stamp = ros::Time::now();
 			cloud.header.stamp = pcl_conversions::toPCL(stamp);
 			output_pub_.publish(cloud.makeShared());

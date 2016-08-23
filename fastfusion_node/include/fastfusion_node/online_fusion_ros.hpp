@@ -31,7 +31,9 @@
 #include <pcl/kdtree/kdtree_flann.h>
 
 #include <opencv2/opencv.hpp>
+#ifdef __LINUX__
 #include <omp.h>
+#endif
 #include <stdio.h>
 #include <math.h>
 #include <string>
