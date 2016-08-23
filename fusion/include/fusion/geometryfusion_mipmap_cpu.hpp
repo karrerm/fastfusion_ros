@@ -21,6 +21,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <list>
+#include <map>
 
 typedef class FloatVertex_
 {
@@ -357,9 +358,10 @@ protected:
 	double _avgTimeMesh;
 	double _avgTimeSumMesh;
 	bool _verbose;
-	unsigned int _avgBricksUpdated;
-	unsigned int _avgBricksTracked;
+	uint64_t _avgBricksUpdated;
+	uint64_t _avgBricksTracked;
 	volumetype _averageLeaves;
+	double _avgOverheadTimeWindow;
 
 	bool _performIncrementalMeshing;
 	class BudsAnchor{
@@ -449,8 +451,7 @@ protected:
 	std::list<size_t> _meshCellQueueNext;
 
 	//-- Members to tracked the updated mesh cells (and if they are older than threshold--> outdated)
-	std::vector<volumetype> _usedMeshCells;
-	std::vector<double> _latestUpdateTime;
+	std::map<volumetype, double> _usedCellsWithTime;
 	std::vector<volumetype> _outdatedMeshCells;
 	bool *_leafNumberIsOutdated;
 
