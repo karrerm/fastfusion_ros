@@ -69,7 +69,11 @@
 #include <mutex>
 #include <condition_variable>
 
-
+struct MeshStruct {
+  std::vector<Eigen::Vector3d> vertices;
+  std::vector<Eigen::Matrix<unsigned char,3,1> > colors;
+  std::vector<Eigen::Matrix<unsigned int, 2,1> > edges;
+};
 
 class OnlineFusionROS
 {
@@ -84,6 +88,9 @@ public:
 
 	//-- Starting new Map
 	bool startNewMap();
+
+	//-- Get the mesh data in standard format
+	MeshStruct getMesh();
 
 	//-- Members related to Meshing
 	std::vector<float> _boundingBox;

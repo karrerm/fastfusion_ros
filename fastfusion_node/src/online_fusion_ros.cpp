@@ -169,6 +169,32 @@ bool OnlineFusionROS::startNewMap() {
 	return true;
 }
 
+MeshStruct OnlineFusionROS::getMesh() {
+  MeshStruct result;
+  {
+    std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
+    result.vertices.reserve(_currentMeshInterleaved->vertices.size());
+    result.colors.reserve(_currentMeshInterleaved->vertices.size());
+    result.edges.reserve(_currentMeshInterleaved->edges.size());
+    for (size_t i = 0; i < _currentMeshInterleaved->vertices.size(); ++i) {
+      result.vertices.push_back(Eigen::Vector3d(
+          _currentMeshInterleaved->vertices[i].x,
+          _currentMeshInterleaved->vertices[i].y,
+          _currentMeshInterleaved->vertices[i].z));
+      result.colors.push_back(Eigen::Matrix<unsigned char, 3, 1>(
+          _currentMeshInterleaved->colors[i].r,
+          _currentMeshInterleaved->colors[i].g,
+          _currentMeshInterleaved->colors[i].b));
+    }
+    for (size_t i = 0; i < _currentMeshInterleaved->edges.size(); i += 2) {
+      result.edges.push_back(Eigen::Matrix<unsigned int, 2, 1>(
+          _currentMeshInterleaved->edges[i],
+          _currentMeshInterleaved->edges[i+1]));
+    }
+  }
+  return result;
+}
+
 void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
 								bool saveMesh, std::string fileName, bool usePclVisualizer){
 //-- Initialize FusionMipMapCPU-class (_fusion)
