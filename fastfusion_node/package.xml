@@ -25,6 +25,7 @@
   <build_depend>nav_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>image_transport</build_depend>
+  <build_depend>mesh_msgs</build_depend>
   
   <build_depend>tclap</build_depend>
   <run_depend>tclap</run_depend>

@@ -11,19 +11,17 @@ set(OpenCV_LIBS opencv_core opencv_imgproc opencv_highgui opencv_calib3d)
 #set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -mavx2 -funroll-loops -DOWNAVX")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -mavx2 -funroll-loops -DOWNAVX")
-if(UNIX AND NOT APPLE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
-endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -msse4.2 -funroll-loops")
 
 #################################################
-#	Find the necessary Pkgs 					#
+#	Find the necessary Pkgs 					#		
 #################################################
 find_package(catkin REQUIRED)
 find_package(catkin_simple REQUIRED)
 find_package(cmake_modules REQUIRED)
-find_package(PCL 1.8 REQUIRED)
+find_package(PCL 1.7 REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -32,6 +30,7 @@ find_package(Threads REQUIRED)
 #################################################
 include_directories(${PCL_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${catkin_INCLUDE_DIRS})
 include_directories(${Eigen_INCLUDE_DIRS})
 #include_directories("/usr/include/eigen3")
 
@@ -51,30 +50,12 @@ add_executable(fastfusion_node
 #################################################
 # 	Link to target Libraries                   	#
 #################################################
-if(APPLE OR WIN32)
 target_link_libraries(fastfusion_node
 										${catkin_LIBRARIES}
-										${CATKIN_DEVEL_PREFIX}/lib/libgeometryfusion_mipmap_cpu.a
-										${CATKIN_DEVEL_PREFIX}/lib/libgeometryfusion_aos.a
-										${CATKIN_DEVEL_PREFIX}/lib/libcamerautils.a
-										${CATKIN_DEVEL_PREFIX}/lib/libauxiliary.a
-										${OpenCV_LIBS}
-										boost_thread-mt
-										boost_system-mt
-										${PCL_LIBRARIES}
-										pcl_common
-										pcl_io
-										pcl_visualization
-										pcl_surface
-										${CMAKE_THREAD_LIBS_INIT}
-)
-else()
-target_link_libraries(fastfusion_node
-										${catkin_LIBRARIES}
-										${CATKIN_DEVEL_PREFIX}/lib/libgeometryfusion_mipmap_cpu.a
-										${CATKIN_DEVEL_PREFIX}/lib/libgeometryfusion_aos.a
-										${CATKIN_DEVEL_PREFIX}/lib/libcamerautils.a
-										${CATKIN_DEVEL_PREFIX}/lib/libauxiliary.a
+								    /home/karrerm/catkin_ws/devel/lib/libgeometryfusion_mipmap_cpu.a
+										/home/karrerm/catkin_ws/devel/lib/libgeometryfusion_aos.a
+										/home/karrerm/catkin_ws/devel/lib/libcamerautils.a
+										/home/karrerm/catkin_ws/devel/lib/libauxiliary.a
 										${OpenCV_LIBS}
 										boost_thread
 										boost_system
@@ -83,9 +64,7 @@ target_link_libraries(fastfusion_node
 										pcl_io
 										pcl_visualization
 										pcl_surface
-										${CMAKE_THREAD_LIBS_INIT}
-)
-endif()
+										${CMAKE_THREAD_LIBS_INIT})
 
 cs_install()
 cs_export()
