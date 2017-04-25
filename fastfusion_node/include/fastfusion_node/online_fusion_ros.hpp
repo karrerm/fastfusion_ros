@@ -8,6 +8,7 @@
 #define INCLUDE_ONLINE_FUSION_ROS_HPP_
 
 #include <ros/ros.h>
+#include <mesh_msgs/mesh.h>
 #include <image_transport/image_transport.h>
 #include <camerautils/camerautils.hpp>
 #include <auxiliary/multivector.h>
@@ -72,7 +73,7 @@
 struct MeshStruct {
   std::vector<Eigen::Vector3d> vertices;
   std::vector<Eigen::Matrix<unsigned char,3,1> > colors;
-  std::vector<Eigen::Matrix<unsigned int, 2,1> > edges;
+  std::vector<Eigen::Matrix<unsigned int, 3,1> > faces;
 };
 
 class OnlineFusionROS
@@ -90,13 +91,14 @@ public:
 	bool startNewMap();
 
 	//-- Get the mesh data in standard format
-	MeshStruct getMesh();
+	mesh_msgs::mesh getMesh();
 
 	//-- Members related to Meshing
 	std::vector<float> _boundingBox;
 	MeshSeparate *_currentMeshForSave;
 	MeshInterleaved *_currentMeshInterleaved;
 	std::vector<PointerMeshDraw*> _pointermeshes;
+
 
 	//-- The actual fusion member
 	FusionMipMapCPU* _fusion;
@@ -142,6 +144,23 @@ public:
 
 
 protected :
+  int meshCounter_;
+  std::ofstream meshOutput_;
+	//-- Members for maintaining a ROS message for sending the current mesh
+  MeshInterleaved *_currentMeshForMessage;
+  bool _currentMeshExists;
+  bool _canBeSended;
+  bool _messageCanBeUpdated;
+  bool _meshCanBeUpdated;
+  std::mutex _updateMutex;
+  std::mutex _sendMutex;
+  std::mutex _messageMutex;
+  mesh_msgs::mesh _meshMsg, _meshMsgSend;
+  void messageUpdateLoop();
+  std::thread* _messageThread;
+  ros::Time _messageStamp;
+  std::condition_variable _messageThreadCondition;
+
 	bool _isSetup;
 	//-- Visualization Members
 	void visualize();

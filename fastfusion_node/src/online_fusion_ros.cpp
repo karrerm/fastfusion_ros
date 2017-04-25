@@ -19,6 +19,7 @@
 OnlineFusionROS::OnlineFusionROS(bool createMeshList):
 	_currentMeshForSave(NULL),
 	_currentMeshInterleaved(NULL),
+	_currentMeshForMessage(NULL),
 	_fusion(NULL),
 	_imageDepthScale(5000.0f), _maxCamDistance(MAXCAMDISTANCE),
 	_threadFusion(false),
@@ -37,7 +38,12 @@ OnlineFusionROS::OnlineFusionROS(bool createMeshList):
 	_runFusion(false), _createMeshList(createMeshList),
 	_lightingEnabled(false),
 	_colorEnabled(true),
-	_isSetup(false)
+	_isSetup(false),
+  _meshCanBeUpdated(true),
+	_messageCanBeUpdated(false),
+	_currentMeshExists(false),
+  _canBeSended(false),
+  meshCounter_(0)
 {
 	_meshNumber = 0;
 	_fusionNumber = 0;
@@ -52,11 +58,13 @@ OnlineFusionROS::OnlineFusionROS(bool createMeshList):
 	pointIsClicked = false;
 	sphereIsInitialized = true;
 	numberClickedPoints = 0;
+  meshOutput_.open("/home/karrerm/WEF/mesh1.csv");
 }
 
 OnlineFusionROS::~OnlineFusionROS()
 {
 	std::cout << "in OnlineFusionROS destructor " << std::endl;
+  meshOutput_.close();
 	//-- Delete Data
 	if(_fusion) delete _fusion;
 	if(_currentMeshForSave) delete _currentMeshForSave;
@@ -169,30 +177,71 @@ bool OnlineFusionROS::startNewMap() {
 	return true;
 }
 
-MeshStruct OnlineFusionROS::getMesh() {
-  MeshStruct result;
+mesh_msgs::mesh OnlineFusionROS::getMesh() {
+  std::cout << "Tries to get mesh message" << std::endl;
   {
-    std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
-    result.vertices.reserve(_currentMeshInterleaved->vertices.size());
-    result.colors.reserve(_currentMeshInterleaved->vertices.size());
-    result.edges.reserve(_currentMeshInterleaved->edges.size());
-    for (size_t i = 0; i < _currentMeshInterleaved->vertices.size(); ++i) {
-      result.vertices.push_back(Eigen::Vector3d(
-          _currentMeshInterleaved->vertices[i].x,
-          _currentMeshInterleaved->vertices[i].y,
-          _currentMeshInterleaved->vertices[i].z));
-      result.colors.push_back(Eigen::Matrix<unsigned char, 3, 1>(
-          _currentMeshInterleaved->colors[i].r,
-          _currentMeshInterleaved->colors[i].g,
-          _currentMeshInterleaved->colors[i].b));
-    }
-    for (size_t i = 0; i < _currentMeshInterleaved->edges.size(); i += 2) {
-      result.edges.push_back(Eigen::Matrix<unsigned int, 2, 1>(
-          _currentMeshInterleaved->edges[i],
-          _currentMeshInterleaved->edges[i+1]));
+    std::lock_guard<std::mutex> lock(_sendMutex);
+    if (_canBeSended ) {
+      return _meshMsgSend;
     }
   }
-  return result;
+  return mesh_msgs::mesh();
+}
+
+void OnlineFusionROS::messageUpdateLoop() {
+
+  while(_runFusion) {
+    std::unique_lock<std::mutex> lock(_messageMutex);
+    while(!_messageCanBeUpdated) {
+      _messageThreadCondition.wait(lock);
+    }
+    _meshCanBeUpdated = false;
+    _meshMsg = mesh_msgs::mesh();
+std::cout << "Creates a new mesh message" << std::endl;
+    _messageCanBeUpdated = false;
+    _canBeSended = false;
+    _meshMsg.header.stamp = _messageStamp;
+    _meshMsg.header.seq = 1;
+    _meshMsg.orientation.x = 0;// currentRot_.x();
+    _meshMsg.orientation.y = 0;// currentRot_.y();
+    _meshMsg.orientation.z = 0;// currentRot_.z();
+    _meshMsg.orientation.w = 1;// currentRot_.w();
+    _meshMsg.translation.x = 0;// currentTrans_[0];
+    _meshMsg.translation.y = 0;// currentTrans_[1];
+    _meshMsg.translation.z = 0;// currentTrans_[2];
+    std::cout << "In Line: " << __LINE__ << std::endl;
+    // Fill in the mesh dependend data
+    mesh_msgs::vertice tmpVertice;
+    _meshMsg.numVertices = _currentMeshForMessage->vertices.size();
+    _meshMsg.numFaces = _currentMeshForMessage->faces.size()/3;
+    _meshMsg.vertices.clear();
+    _meshMsg.faces.clear();
+    _meshMsg.vertices.reserve(_meshMsg.numVertices);
+    for (size_t i = 0; i < _meshMsg.numVertices; ++i) {
+      tmpVertice.point.x = _currentMeshForMessage->vertices[i].x;
+      tmpVertice.point.y = _currentMeshForMessage->vertices[i].y;
+      tmpVertice.point.z = _currentMeshForMessage->vertices[i].z;
+      tmpVertice.r.data = (uint8_t)_currentMeshForMessage->colors[i].r;
+      tmpVertice.g.data = (uint8_t)_currentMeshForMessage->colors[i].g;
+      tmpVertice.b.data = (uint8_t)_currentMeshForMessage->colors[i].b;
+      _meshMsg.vertices.push_back(tmpVertice);
+    }
+    mesh_msgs::face tmpFace;
+    _meshMsg.faces.reserve(_meshMsg.numFaces);
+    for (size_t i = 0; i < _currentMeshForMessage->faces.size(); i += 3) {
+      tmpFace.first.data = _currentMeshForMessage->faces[i];
+      tmpFace.second.data = _currentMeshForMessage->faces[i+1];
+      tmpFace.third.data = _currentMeshForMessage->faces[i+2];
+      _meshMsg.faces.push_back(tmpFace);
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(_sendMutex);
+      _meshMsgSend = _meshMsg;
+      _canBeSended = true;
+    }
+    _meshCanBeUpdated = true;
+  }
 }
 
 void OnlineFusionROS::setupFusion(bool fusionThread, bool meshingThread,float imageScale, float scale, float distThreshold,
@@ -413,7 +462,6 @@ void OnlineFusionROS::visualize() {
     viewer->close();
 }
 
-
 void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose, double time, double decayTime, ros::Time timestamp) {
 //-- Interface with fusion member which allows to query new depth data without noise information
 	if (!_threadFusion) {
@@ -435,6 +483,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		if(!_currentMeshInterleaved) {
 			std::cout << "Create New Mesh Interleaved" << std::endl;;
 			_currentMeshInterleaved = new MeshInterleaved(3);
+			_currentMeshForMessage = new MeshInterleaved(3);
 		}
 		//-- Generate new Mesh
 		*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
@@ -450,6 +499,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 			//-- If not yet initialize --> initialize fusion thread
 			_fusionThread = new std::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
+			_messageThread = new std::thread(&OnlineFusionROS::messageUpdateLoop,this);
 		}
 		_currentPose = pose;
 
@@ -468,17 +518,40 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInf
 		_frameCounter++;
 		//--Update Mesh
 		if(_newMesh){
+      std::cout << "New mesh...." << std::endl;
 			_newMesh = false;
 			{ // visualization scope begin
 			std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
-			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
+			if(!_currentMeshInterleaved) {
+			  _currentMeshInterleaved = new MeshInterleaved(3);
+			  _currentMeshForMessage = new MeshInterleaved(3);
+			}
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+
+      if (_meshCanBeUpdated){
+        std::lock_guard<std::mutex> meshLock(_messageMutex);
+        std::cout << "Updates Mesh" << std::endl;
+         _messageStamp = timestamp;
+        *_currentMeshForMessage = _fusion->getMeshInterleavedMarchingCubes();
+        _currentMeshExists = true;
+        _messageCanBeUpdated = true;
+        _messageThreadCondition.notify_one();
+      } else {
+        std::cout << "Rejected Mesh update" << std::endl;
+      }
 			} // visualization scope end
-		}
+    } else {
+      std::cout << "No new mesh available" << std::endl;
+    }
 		//-- Check whether to update Visualization
-		if (_frameCounter > 10) {
+    if (_frameCounter > 3) {
 			//-- Only update visualization after 10 frames fused
+      std::string filename = "/home/karrerm/WEF/Mesh1/mesh_" + std::to_string(meshCounter_);
+      meshOutput_  << std::setprecision(25) << (double)meshCounter_ << "," << time << std::endl;
+      _currentMeshInterleaved->writePLY(filename,false);
+      ++meshCounter_;
+      _frameCounter = 0;
 			_update = true;
 		}
 	}
@@ -521,6 +594,7 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 			//-- If not yet initialize --> initialize fusion thread
 			_fusionThread = new std::thread(&OnlineFusionROS::fusionWrapperROS, this);
 			_runFusion = true;
+			_messageThread = new std::thread(&OnlineFusionROS::messageUpdateLoop,this);
 		}
 		_currentPose = pose;
 		//-- Lock and update data-queue
@@ -543,7 +617,9 @@ void OnlineFusionROS::updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &
 			std::lock_guard<std::mutex> updateLockVis(_visualizationUpdateMutex);
 			if(!_currentMeshForSave) _currentMeshForSave = new MeshSeparate(3);
 			if(!_currentMeshInterleaved) _currentMeshInterleaved = new MeshInterleaved(3);
+			double time = (double)cv::getTickCount();
 			*_currentMeshInterleaved = _fusion->getMeshInterleavedMarchingCubes();
+			std::cout << "Time to get mesh: " << ((double)cv::getTickCount() - time)/cv::getTickFrequency()*1000.0 << " ms" << std::endl;
 			}
 		}
 		//-- Check whether to update Visualization
