@@ -6,6 +6,8 @@
  */
 
 #include "fastfusion_node/fastfusion_node.hpp"
+#include <mesh_msgs/mesh.h>
+#include <cstdint>
 
 FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 //Constructor FastFusionWrapper
@@ -181,6 +183,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
+  poseOutput_.open("/home/karrerm/WEF/poses1.csv");
 	while (!onlinefusion_.isSetup()){
 		//-- Waiting for onlinefusion to be setup
 	}
@@ -215,14 +218,24 @@ void FastFusionWrapper::run() {
 	} else {
 		//-- Use RealSense data for the reconstruction
 		//-- Synchronize the image messages received from Realsense Sensor
-		subscriberPointCloud_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>;
-		subscriberPointCloud_->subscribe(node_, node_.resolveName("point_cloud"),15);
-		subscriberPointCloud_->registerCallback(&FastFusionWrapper::registerPointCloudCallback,this);
+    /*subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
+    subscriberConfidence_ = new message_filters::Subscriber<sensor_msgs::Image>;
+    subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),15);
+    subscriberConfidence_->subscribe(node_,node_.resolveName("image_vi"),15);
+
+    sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
+    (message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(15),
+        *subscriberDepth_,*subscriberConfidence_);
+    sync_->registerCallback(boost::bind(&FastFusionWrapper::registerPointCloudCallback2, this,  _1,  _2)); */
+    subscriberPointCloud_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>;
+    subscriberPointCloud_->subscribe(node_, node_.resolveName("point_cloud"),15);
+std::cout << "Has subscribed to point cloud callback!!!" << std::endl;
+    subscriberPointCloud_->registerCallback(&FastFusionWrapper::registerPointCloudCallback,this);
 	}
 	//-- Point Cloud publisher (only used for time window based reconstruction
-	ros::Publisher output_pub_ = node_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > ("fastfusion/pointCloud", 100);
+	ros::Publisher output_pub_ = node_.advertise<mesh_msgs::mesh> ("fastfusion/mesh", 1);
 	frameCounter_ = 0;
-	ros::Duration(1.5).sleep();
+  ros::Duration(0.2).sleep();
 	ros::Rate r(50);
 	bool halted = true;
 	while (ros::ok()) {
@@ -242,14 +255,64 @@ void FastFusionWrapper::run() {
 			}
 		}
 		//-- Publish the current point cloud
-		if ((frameCounter_ > 8) && (runMapping_) && decayTime_ >0.0 ){
-			pcl::PointCloud<pcl::PointXYZRGB> cloud = onlinefusion_.getCurrentPointCloud();
-			cloud.header.frame_id = world_id_;
-			ros::Time stamp = ros::Time::now();
-			cloud.header.stamp = pcl_conversions::toPCL(stamp);
-			output_pub_.publish(cloud.makeShared());
-			frameCounter_ = 0;
+		if (frameCounter_ > 10) {
+		mesh_msgs::mesh meshMsg = onlinefusion_.getMesh();
+		if (meshMsg.numVertices > 3) {
+      std::cout << "Publishes message" << std::endl;
+		  output_pub_.publish(meshMsg);
 		}
+		frameCounter_ = 0;
+		}
+		// if ((frameCounter_ > 10) && (runMapping_) && decayTime_ >0.0 ){
+		//   double time = (double)cv::getTickCount();
+		// 	MeshStruct currentMesh = onlinefusion_.getMesh();
+		// 	mesh_msgs::mesh meshMsg;
+		// 	// Fill in the view dependend data
+		// 	{
+		// 	  std::lock_guard<std::mutex> publishLock(publishMutex_);
+		// 	  meshMsg.header.stamp = currentTime_;
+		// 	  meshMsg.header.seq = 1;
+		// 	  meshMsg.orientation.x = currentRot_.x();
+		// 	  meshMsg.orientation.y = currentRot_.y();
+		// 	  meshMsg.orientation.z = currentRot_.z();
+		// 	  meshMsg.orientation.w = currentRot_.w();
+		// 	  meshMsg.translation.x = currentTrans_[0];
+		// 	  meshMsg.translation.y = currentTrans_[1];
+		// 	  meshMsg.translation.z = currentTrans_[2];
+		// 	}
+		// 	// Fill in the mesh dependend data
+		// 	mesh_msgs::vertice tmpVertice;
+		// 	meshMsg.numVertices = currentMesh.vertices.size();
+		// 	meshMsg.vertices.reserve(currentMesh.vertices.size());
+		// 	for (size_t i = 0; i < currentMesh.vertices.size(); ++i) {
+		// 	  tmpVertice.point.x = currentMesh.vertices[i][0];
+		// 	  tmpVertice.point.y = currentMesh.vertices[i][1];
+		// 	  tmpVertice.point.z = currentMesh.vertices[i][2];
+		// 	  tmpVertice.r.data = (uint8_t)currentMesh.colors[i](0,0);
+		// 	  tmpVertice.g.data = (uint8_t)currentMesh.colors[i](1,0);
+		// 	  tmpVertice.b.data = (uint8_t)currentMesh.colors[i](2,0);
+		// 	  meshMsg.vertices.push_back(tmpVertice);
+		// 	}
+		// 	mesh_msgs::face tmpFace;
+		// 	meshMsg.numFaces = currentMesh.faces.size();
+		// 	meshMsg.faces.reserve(currentMesh.faces.size());
+		// 	for (size_t i = 0; i < currentMesh.faces.size(); ++i) {
+		// 	  tmpFace.first.data = currentMesh.faces[i](0,0);
+		// 	  tmpFace.second.data = currentMesh.faces[i](1,0);
+		// 	  tmpFace.third.data = currentMesh.faces[i](2,0);
+		// 	  meshMsg.faces.push_back(tmpFace);
+		// 	}
+		// 	output_pub_.publish(meshMsg);
+		// 	std::cout << "It took " << ((double)cv::getTickCount() - time)/cv::getTickFrequency()*1000.0 << " ms to send the mesh" << std::endl;
+    //
+		//   //pcl::PointCloud<pcl::PointXYZRGB> cloud = onlinefusion_.getCurrentPointCloud();
+		// 	//cloud.header.frame_id = world_id_;
+		// 	//ros::Time stamp = ros::Time::now();
+		// 	//cloud.header.stamp = pcl_conversions::toPCL(stamp);
+		// 	//output_pub_.publish(cloud.makeShared());
+		// 	frameCounter_ = 0;
+		// }
+std::cout << "Spinning...." << std::endl;
 		ros::spinOnce();
 		r.sleep();
 	}
@@ -257,6 +320,7 @@ void FastFusionWrapper::run() {
 	if (!halted){
 		onlinefusion_.stop();
 	}
+  poseOutput_.close();
 	ros::shutdown();
 }
 
@@ -456,10 +520,68 @@ void FastFusionWrapper::depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDe
 	}
 }
 
+void FastFusionWrapper::projectDepthIntoGray(const cv::Mat& depthImg, const cv::Mat& grayImg, cv::Mat *registeredImg) {
+  // Undistort the grayscale image
+
+  //
+  //registeredImg
+}
+
+void FastFusionWrapper::registerPointCloudCallback2(const sensor_msgs::ImageConstPtr& msgDepth,
+    const sensor_msgs::ImageConstPtr& msgGray) {
+  if (((msgDepth->header.stamp - previous_ts_).toSec() <= 0.05) || !runMapping_){
+    return;
+  }
+  std::cout << "Received depth image..." << std::endl;
+  //-- Prepare the image mats
+  cv::Mat imgDepth;
+  cv::Mat imgGray;
+  getDepthImageFromRosMsg(msgDepth, &imgDepth);
+  getConfImageFromRosMsg(msgGray, &imgGray);
+  cv::Mat registeredImg(imgDepth.rows, imgDepth.cols, CV_8UC3, CV_RGB(200,200,200));
+  cv::imwrite("/home/karrerm/debug/depth_img.png", imgDepth);
+  //-- Get time stamp of the incoming images
+  ros::Time timestamp = msgDepth->header.stamp;
+  //broadcastTFchain(timestamp);
+  previous_ts_ = timestamp;
+  double time = timestamp.toSec();
+
+  //-- Get Pose (tf-listener)
+  tf::StampedTransform transform;
+  try{
+    ros::Time nowTime = ros::Time::now();
+    tfListener.waitForTransform(world_id_,cam_id_,
+        timestamp, ros::Duration(2.0));
+    tfListener.lookupTransform(world_id_, cam_id_,
+        timestamp, transform);
+  }
+  catch (tf::TransformException ex){
+    ROS_ERROR("%s",ex.what());
+    ros::Duration(1.0).sleep();
+  }
+
+  //-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+  CameraInfo incomingFramePose;
+  incomingFramePose = convertTFtoCameraInfo(transform);
+  {
+  std::lock_guard<std::mutex> publishLock(publishMutex_);
+  tf::quaternionTFToEigen(transform.getRotation(), currentRot_);
+  tf::vectorTFToEigen(transform.getOrigin(), currentTrans_);
+  currentTime_ = timestamp;
+  }
+
+  //-- Fuse the imcoming Images into existing map
+  if (runMapping_) {
+    frameCounter_++;
+    onlinefusion_.updateFusion(registeredImg, imgDepth, incomingFramePose,time, decayTime_,timestamp);
+  }
+
+}
 
 void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& pcl_msg) {
+std::cout << "Gets into point cloud callback!!!" << std::endl;
 //-- Callback for colored point cloud (as published by the RealSense Sensor
-	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.01) || !runMapping_){
+  if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.02) || !runMapping_){
 		return;
 	}
 	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
@@ -468,6 +590,7 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	//-- Create RGB and Depth image from point cloud
 	unsigned int width = pcl_msg->width;
 	unsigned int height = pcl_msg->height;
+std::cout << "width: " << width << ", height: " << height << std::endl;
 	cv::Mat imgDepth(height,width,CV_16UC1);
 	cv::Mat imgRGB(height, width,CV_8UC3);
 	unsigned int indexRGB = 0;
@@ -476,6 +599,12 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 		for (unsigned int u = 0; u < width; u++) {
 			indexRGB = 3*(width*v + u);
 			indexDepth = width*v + u;
+      if ((u < 10) | (u > 310) | (v < 10) | (v > 230)) {
+      imgRGB.data[indexRGB + 0] = 0;
+			imgRGB.data[indexRGB + 1] = 0;
+			imgRGB.data[indexRGB + 2] = 0;
+      imgDepth.at<unsigned short>(v,u) = (unsigned short)0.0;
+      } else {
 			imgRGB.data[indexRGB + 0] = pcl_cloud.points[indexDepth].b;
 			imgRGB.data[indexRGB + 1] = pcl_cloud.points[indexDepth].g;
 			imgRGB.data[indexRGB + 2] = pcl_cloud.points[indexDepth].r;
@@ -484,14 +613,16 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 			} else {
 				imgDepth.at<unsigned short>(v,u) = (unsigned short)0.0;
 			}
+      }
 		}
 	}
 	cv::Mat imgDepthCorr(height,width,CV_16UC1);
-	depthImageCorrection(imgDepth, &imgDepthCorr);
+	imgDepthCorr = imgDepth;
+	//depthImageCorrection(imgDepth, &imgDepthCorr);
 
 	//-- Get time stamp of the incoming images
 	ros::Time timestamp = pcl_msg->header.stamp;
-	broadcastTFchain(timestamp);
+	//broadcastTFchain(timestamp);
 	previous_ts_ = timestamp;
 	double time = timestamp.toSec();
 	//-- Get Pose (tf-listener)
@@ -499,23 +630,34 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	try{
 		ros::Time nowTime = ros::Time::now();
 		tfListener.waitForTransform(world_id_,cam_id_,
-				timestamp, ros::Duration(2.0));
+        timestamp, ros::Duration(0.1));
 		tfListener.lookupTransform(world_id_, cam_id_,
 				timestamp, transform);
 	}
 	catch (tf::TransformException ex){
 		ROS_ERROR("%s",ex.what());
-		ros::Duration(1.0).sleep();
+    ros::Duration(0.1).sleep();
 		return;
 	}
 
 	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
+	{
+	std::lock_guard<std::mutex> publishLock(publishMutex_);
+	tf::quaternionTFToEigen(transform.getRotation(), currentRot_);
+	tf::vectorTFToEigen(transform.getOrigin(), currentTrans_);
+	currentTime_ = timestamp;
+	}
 
 	//-- Fuse the imcoming Images into existing map
 	if (runMapping_) {
 		frameCounter_++;
+    Eigen::Quaterniond q;
+    Eigen::Vector3d c;
+    tf::vectorTFToEigen(transform.getOrigin(),c);
+    tf::quaternionTFToEigen(transform.getRotation(),q);
+    poseOutput_ << std::setprecision(20) << time << "," << c[0] << "," << c[1] << "," << c[2] << "," << q.x() << "," << q.y() << "," << q.z() << "," << q.w() << std::endl;
 		onlinefusion_.updateFusion(imgRGB, imgDepthCorr, incomingFramePose,time, decayTime_,timestamp);
 	}
 }

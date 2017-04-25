@@ -31,6 +31,7 @@
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <mutex>
 
 class FastFusionWrapper {
 public:
@@ -39,6 +40,7 @@ public:
 	//-- Main Function
 	void run(void);
 protected:
+  std::ofstream poseOutput_;
 	//-- Image Message Callback (not used)
 	void imageCallback(const sensor_msgs::ImageConstPtr& msg_cam0, const sensor_msgs::ImageConstPtr& msg_cam1);
 	//-- ToF Callback with noise data
@@ -48,6 +50,9 @@ protected:
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf);
 	//-- Registered Point cloud callback (colored pointcloud) for the use with the RealSense sensor
 	void registerPointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr & pcl_msg);
+  void registerPointCloudCallback2(const sensor_msgs::ImageConstPtr& msgDepth,
+      const sensor_msgs::ImageConstPtr& msgGray);
+	void projectDepthIntoGray(const cv::Mat& depthImg, const cv::Mat& grayImg, cv::Mat *registeredImg);
 
 	//-- Extract OpenCV mat from ROS messages
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
@@ -72,6 +77,12 @@ protected:
 	cv::Mat distCoeff_, distCoeffRGB_;
 	cv::Mat depthCorrection_;
 	double imageScale_;
+
+	//-- Pose info for mesh publishing
+	ros::Time currentTime_;
+	Eigen::Quaterniond currentRot_;
+	Eigen::Vector3d currentTrans_;
+	std::mutex publishMutex_;
 
 	//-- Wrapper Member for the actual fusion
 	OnlineFusionROS onlinefusion_;
