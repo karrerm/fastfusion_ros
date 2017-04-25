@@ -6,10 +6,10 @@
  */
 
 #include "fastfusion_node/fastfusion_node.hpp"
-#include <pcl/io/pcd_io.h>
-#include <pcl/io/ply_io.h>
-#include <pcl/surface/gp3.h>
-#include <pcl/visualization/pcl_visualizer.h>
+//#include <pcl/io/pcd_io.h>
+//#include <pcl/io/ply_io.h>
+//#include <pcl/surface/gp3.h>
+//#include <pcl/visualization/pcl_visualizer.h>
 
 
 /*
@@ -19,6 +19,7 @@
  */
 int main(int argc, char **argv)
 {
+std::cout << "Starting" << std::endl;
   ros::init(argc, argv, "fastfusion_node");
 
   ROS_INFO("\nStarting fastfusion node with name %s\n", ros::this_node::getName().c_str());
